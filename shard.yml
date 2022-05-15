@@ -1,0 +1,13 @@
+name: session
+version: 0.1.0
+
+authors:
+  - Elias J. Perez <eliasjpr@gmail.com>
+
+crystal: 1.4.1
+
+license: MIT
+
+dependencies:
+  redis:
+    github: stefanwille/crystal-redis
