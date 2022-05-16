@@ -1,9 +1,10 @@
 module Session
+  class SessionHandler
     include HTTP::Handler
 
     def initialize(@session)
     end
-  
+
     def call(context : HTTP::Server::Context)
       @session.load_from session_cookie(context)
       call_nex(context)
