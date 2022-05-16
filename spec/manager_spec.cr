@@ -4,14 +4,20 @@ describe Session::Manager do
   user_session = UserSession.new("dark-rider")
   redis_store = Session::RedisStore(UserSession).new Redis.new
 
-  managers = [
-    Session::Manager(UserSession).new,
-    Session::Manager(UserSession).new(store: redis_store),
-  ]
+  managers = {
+    memory: Session::Manager(UserSession).new,
+    redis:  Session::Manager(UserSession).new(store: redis_store),
+  }
 
-  managers.each do |manager|
+  stores = {
+    memory: "Session::MemoryStore(UserSession)",
+    redis:  "Session::RedisStore(UserSession)",
+  }
+
+  managers.each do |storage, manager|
     it "is a Session Provider" do
       manager.should be_a Session::Provider
+      manager.storage.should eq stores[storage]
     end
 
     it "create a new session" do
@@ -51,6 +57,14 @@ describe Session::Manager do
       cookie = manager.cookie
       cookie.name.should eq manager.session_key
       cookie.value.should eq manager.session_id
+    end
+
+    it "deletes the current session" do
+      sid = manager.session_id
+      manager.delete
+
+      manager.current_session.should be_nil
+      manager[sid]?.should be_nil
     end
   end
 end
