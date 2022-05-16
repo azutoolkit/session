@@ -14,7 +14,7 @@ module Session
     end
 
     # Gets or create a session
-    def load_from_cookie(cookie : HTTP::Cookie) : SessionId(T)?
+    def load_from(cookie : HTTP::Cookie) : SessionId(T)?
       @current_session = self[cookie.value]?
     end
 

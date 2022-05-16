@@ -24,7 +24,7 @@ describe Session::Manager do
       manager.username.should eq "dark-rider"
     end
 
-    it "reads session from valid session cookie" do
+    it "loads session from valid session cookie" do
       value = Session::SessionId(UserSession).new(manager.timeout)
 
       cookie = HTTP::Cookie.new(
@@ -36,27 +36,11 @@ describe Session::Manager do
         creation_time: Time.local,
       )
 
-      manager.load_from_cookie(cookie).should eq manager.current_session
-    end
-
-    it "reads session from valid session cookie" do
-      value = Session::SessionId(UserSession).new(manager.timeout)
-
-      cookie = HTTP::Cookie.new(
-        name: manager.session_key,
-        value: manager.session_id,
-        expires: manager.timeout.from_now,
-        secure: true,
-        http_only: true,
-        creation_time: Time.local,
-      )
-
-      manager.load_from_cookie(cookie).should eq manager.current_session
+      manager.load_from(cookie).should eq manager.current_session
     end
 
     it "creates a session cookie from current session" do
       cookie = manager.cookie
-
       cookie.name.should eq manager.session_key
       cookie.value.should eq manager.session_id
     end
