@@ -16,6 +16,10 @@ describe Session::Manager do
       manager.current_session.should be_a Session::SessionId(UserSession)
     end
 
+    it "checks if session is valid" do
+      manager.valid?.should be_true
+    end
+
     it "returns the current session id" do
       manager.session_id.should be_a String
     end

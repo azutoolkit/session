@@ -22,6 +22,10 @@ module Session
       @current_session.not_nil!.session_id
     end
 
+    def valid?
+      current_session.not_nil!.valid?
+    end
+
     def cookie : HTTP::Cookie
       HTTP::Cookie.new(
         name: session_key,
