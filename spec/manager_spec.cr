@@ -10,6 +10,10 @@ describe Session::Manager do
   ]
 
   managers.each do |manager|
+    it "is a Session Provider" do
+      manager.should be_a Session::Provider
+    end
+
     it "create a new session" do
       manager.create user_session
 

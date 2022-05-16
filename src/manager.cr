@@ -1,5 +1,11 @@
 module Session
+  module Provider
+    abstract def name : String
+  end
+
   class Manager(T)
+    include Provider
+
     getter current_session : SessionId(T)? = nil
     getter timeout : Time::Span
     getter session_key : String
@@ -11,6 +17,10 @@ module Session
       @session_key = "_session",
       @store : Store(T) = MemoryStore(T).new
     )
+    end
+
+    def name : String
+      "provider"
     end
 
     # Gets or create a session

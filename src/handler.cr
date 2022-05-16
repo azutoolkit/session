@@ -2,12 +2,12 @@ module Session
   class SessionHandler
     include HTTP::Handler
 
-    def initialize(@session)
+    def initialize(@session : Session::Provider)
     end
 
     def call(context : HTTP::Server::Context)
       @session.load_from session_cookie(context)
-      call_nex(context)
+      call_next(context)
       context.response.cookies << @session.cookie
     end
 
