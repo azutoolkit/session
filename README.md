@@ -2,21 +2,22 @@
 
 A Strongly typed Session Management library to manage application session and state.
 
-HTTP is a stateless protocol. By default, HTTP requests are independent messages
-that don't retain user values. This article describes several approaches to
-user data between requests.
+HTTP is a stateless protocol, and by default, HTTP requests are independent messages
+that don't retain user values. However, Session shard implements several approaches
+to bind and store user state data between requests.
 
-The Session uses a store maintained by the app to persist data across requests from
+The Session shard uses a store maintained by the app to persist data across requests from
 a client. The session data is backed by a cache and considered ephemeral data.
 The site should continue to function without the session data. Critical application
 data should be stored in the user database and cached in session only as a
 performance optimization.
 
-A cookie can provide the Session state to the client that contains the session ID.
+A cookie provides the Session state to the client that contains the session ID.
 
 The cookie session ID:
 
-- The client sends the session cookie to the app on each request.
+- The client sends the session cookie to the app on each request this is then
+  used to reconstruct the session
 - The app uses the session cookie to fetch the session data.
 
 Session state exhibits the following behaviors:
@@ -59,27 +60,25 @@ The Session shard is ideal for storing user data:
 ```crystal
 require "session"
 
+Session.configure do
+  timeout = 1.hour
+  session_key = "_session"
+end
+
 # Type safe session contents
-record Databag, username : String? = "example" do
-  include JSON::Serializable
+class UserSession
+  include Session::Databag
+  property username : String? = "example"
 end
 
 # Memory Store
 module MyApp
-  class_getter session = Session::Manager(Databag).new(
-    timeout: 1.hour,
-    session_key: "_session",
-    store: MemoryStore(Databag).new
-  )
+  class_getter session = Session::MemoryStore(Databag).provider
 end
 
 # Redis Store
 module MyApp
-  class_getter session = Session::Manager(Databag).new(
-    timeout: 1.hour,
-    session_key: "_session",
-    store: Session::RedisStore(Databag).new(Redis.new)
-  )
+  class_getter session = Session::RedisStore(Databag).provider(client: Redis.new)
 end
 ```
 
@@ -97,6 +96,7 @@ MyApp.session.valid?           # Returns true if session has not expired
 MyApp.session.cookie           # Returns a session cookie that can be sent to clients
 MyApp.session[]                # Gets session by Session Id or raises an exception
 MyApp.session[]?               # Gets session by Session Id or returns nil
+MyApp.session.clear            # Removes all the sessions from store
 ```
 
 > **Note:** Session also offers a _HTTP Handler_ `Session::SessionHandler` to help

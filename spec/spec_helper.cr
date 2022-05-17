@@ -1,6 +1,7 @@
 require "spec"
 require "../src/session"
 
-record UserSession, username : String? = "example" do
-  include JSON::Serializable
+class UserSession
+  include Session::Databag
+  property username : String? = "example"
 end

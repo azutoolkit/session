@@ -1,8 +1,14 @@
 module Session
   class MemoryStore(T)
     include Store(T)
+    include Provider
 
     getter sessions = {} of String => SessionId(T)
+
+    # Gets the session manager store type
+    def storage : String
+      self.class.name
+    end
 
     def [](key : String) : SessionId(T)
       sessions[key]
@@ -12,7 +18,7 @@ module Session
       sessions[key]?
     end
 
-    def set(key : String, session : SessionId(T), expires : Time::Span) : SessionId(T)
+    def set(key : String, session : SessionId(T)) : SessionId(T)
       sessions[key] = session
     end
 
@@ -22,6 +28,10 @@ module Session
 
     def size : Int64
       sessions.count { |k, v| v.valid? }.to_i64
+    end
+
+    def clear
+      sessions.clear
     end
   end
 end

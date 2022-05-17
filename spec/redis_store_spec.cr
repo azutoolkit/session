@@ -1,17 +1,13 @@
 require "./spec_helper"
 
-def prefixed(key)
-  "_session:#{key}"
-end
-
 describe Session::RedisStore do
-  session = Session::SessionId(UserSession).new 1.hour
+  session = Session::SessionId(UserSession).new
   client = Redis.new
   redis_store = Session::RedisStore(UserSession).new client
-  key = prefixed(session.session_id)
+  key = session.session_id
 
   it "persists sessions in redis" do
-    redis_store.set(key, session, 1.hour).should eq session
+    redis_store.set(key, session).should eq session
   end
 
   it "gets session by id" do
@@ -29,6 +25,13 @@ describe Session::RedisStore do
   end
 
   it "returns the total number of active sessions" do
+    redis_store.clear
     redis_store.size.should eq 0
+    redis_store.set key, session
+    redis_store.size.should eq 1
+
+    expired = Session::SessionId(UserSession).new
+    redis_store.set key, expired
+    redis_store.size.should eq 1
   end
 end

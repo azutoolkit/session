@@ -1,12 +1,9 @@
 require "./spec_helper"
 
 describe Session::Manager do
-  user_session = UserSession.new("dark-rider")
-  redis_store = Session::RedisStore(UserSession).new Redis.new
-
   managers = {
-    memory: Session::Manager(UserSession).new,
-    redis:  Session::Manager(UserSession).new(store: redis_store),
+    memory: Session::MemoryStore(UserSession).provider,
+    redis:  Session::RedisStore(UserSession).provider(client: Redis.new),
   }
 
   stores = {
@@ -21,8 +18,7 @@ describe Session::Manager do
     end
 
     it "create a new session" do
-      manager.create user_session
-
+      manager.create
       manager.current_session.should be_a Session::SessionId(UserSession)
     end
 
@@ -35,11 +31,12 @@ describe Session::Manager do
     end
 
     it "gets session data properties" do
+      manager.username = "dark-rider"
       manager.username.should eq "dark-rider"
     end
 
     it "loads session from valid session cookie" do
-      value = Session::SessionId(UserSession).new(manager.timeout)
+      value = Session::SessionId(UserSession).new
 
       cookie = HTTP::Cookie.new(
         name: manager.session_key,
@@ -62,8 +59,6 @@ describe Session::Manager do
     it "deletes the current session" do
       sid = manager.session_id
       manager.delete
-
-      manager.current_session.should be_nil
       manager[sid]?.should be_nil
     end
   end

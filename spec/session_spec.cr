@@ -1,7 +1,7 @@
 require "./spec_helper"
 
 module App
-  class_getter session = Session::Manager(UserSession).new
+  class_getter session = Session::MemoryStore(UserSession).provider
 end
 
 describe Session do

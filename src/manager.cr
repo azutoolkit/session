@@ -1,48 +1,20 @@
 module Session
-  module Provider
-    abstract def storage : String
-  end
-
   class Manager(T)
     include Provider
+    getter current_session : SessionId(T) = SessionId(T).new
+    forward_missing_to current_session.data.not_nil!
 
-    getter current_session : SessionId(T)? = nil
-    getter timeout : Time::Span
-    getter session_key : String
-
-    forward_missing_to current_session.not_nil!.data.not_nil!
-
-    def initialize(
-      @timeout = 1.hour,
-      @session_key = "_session",
-      @store : Store(T) = MemoryStore(T).new
-    )
+    def initialize(@store : Store(T) = MemoryStore(T).new)
     end
 
-    # Gets the session manager store type
     def storage : String
-      @store.class.name
-    end
-
-    # Loads the session from a HTTP::Cookie
-    def load_from(cookie : HTTP::Cookie) : SessionId(T)?
-      @current_session = self[cookie.value]?
-    end
-
-    # Gets the current Session Id
-    def session_id
-      @current_session.not_nil!.session_id
+      @store.storage
     end
 
     # Deletes the current session
     def delete
-      @store.delete prefixed(session_id)
-      @current_session = nil
-    end
-
-    # Validates the current session has not expired
-    def valid?
-      current_session.not_nil!.valid?
+      @store.delete session_id
+      @current_session = SessionId(T).new
     end
 
     # Creates the session cookie
@@ -59,24 +31,40 @@ module Session
 
     # Gets a session by Session Id, throws Key not found
     def [](id : String)
-      @store[prefixed(id)]
+      @store[id]
     end
 
     # Gets a session by Session Id, or returns nil
     def []?(id : String)
-      @store[prefixed(id)]?
+      @store[id]?
+    end
+
+    # Clears all the sessions from store
+    def clear
+      @store.clear
+    end
+
+    # Loads the session from a HTTP::Cookie
+    def load_from(cookie : HTTP::Cookie) : SessionId(T)?
+      @current_session = if store_session = self[cookie.value]?
+                           store_session
+                         else
+                           create
+                         end
     end
 
     # Creates a new session for the given data
     # Data is generic
-    def create(data : T)
-      @current_session = SessionId(T).new(@timeout).not_nil!
-      @current_session.not_nil!.data = data
-      @store.set prefixed(session_id), @current_session.not_nil!, timeout
+    def create
+      @current_session = SessionId(T).new
     end
 
-    private def prefixed(session_id)
-      "#{@session_key}:#{session_id}"
+    def session_id
+      @current_session.session_id
+    end
+
+    def valid?
+      @current_session.valid?
     end
   end
 end

@@ -1,16 +1,12 @@
 require "./spec_helper"
 
-def prefixed(key)
-  "_session:#{key}"
-end
-
 describe Session::MemoryStore do
-  session = Session::SessionId(UserSession).new 1.hour
+  session = Session::SessionId(UserSession).new
   memory_store = Session::MemoryStore(UserSession).new
-  key = prefixed(session.session_id)
+  key = session.session_id
 
   it "persists sessions in memory" do
-    memory_store.set(key, session, 1.hour).should eq session
+    memory_store.set(key, session).should eq session
   end
 
   it "gets session by id" do
@@ -28,12 +24,12 @@ describe Session::MemoryStore do
   end
 
   it "returns the total number of active sessions" do
-    memory_store.size.should eq 0
-    memory_store.set key, session, 1.hour
+    memory_store.clear
+    memory_store.set key, session
     memory_store.size.should eq 1
 
-    expired = Session::SessionId(UserSession).new 1.hour
-    memory_store.set key, expired, 1.hour
+    expired = Session::SessionId(UserSession).new
+    memory_store.set key, expired
     memory_store.size.should eq 1
   end
 end
