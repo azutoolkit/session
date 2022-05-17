@@ -7,6 +7,4 @@ module Session
       end
     end
   end
-
-  
 end

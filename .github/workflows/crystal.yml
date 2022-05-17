@@ -12,6 +12,11 @@ jobs:
 
     container:
       image: crystallang/crystal
+    services:
+      redis:
+        image: docker.io/redis:latest
+        ports:
+          - 6379:6379
 
     steps:
       - uses: actions/checkout@v2
