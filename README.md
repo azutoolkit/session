@@ -107,6 +107,8 @@ MyApp.session.clear            # Removes all the sessions from store
 - [ ] DbStore - Add Database session storage for PG, MySQL
 - [ ] MongoStore - Add Mongo Database session storage
 - [ ] CookieStore - Add Cookie Storage session storage
+- [ ] Session Created Event - Add event on session created
+- [ ] Session Deleted Event - Add event on session deleted
 
 ## Contributing
 
