@@ -36,8 +36,6 @@ describe Session::Manager do
     end
 
     it "loads session from valid session cookie" do
-      value = Session::SessionId(UserSession).new
-
       cookie = HTTP::Cookie.new(
         name: manager.session_key,
         value: manager.session_id,

@@ -27,7 +27,7 @@ module Session
     end
 
     def size : Int64
-      sessions.count { |k, v| v.valid? }.to_i64
+      sessions.count { |_, v| v.valid? }.to_i64
     end
 
     def clear

@@ -18,7 +18,7 @@ A cookie provides the Session state to the client that contains the session ID.
 
 The cookie session ID:
 
-- The client sends the session cookie to the app on each request this is then
+- The client sends the session cookie to the app on each request is then
   used to reconstruct the session
 - The app uses the session cookie to fetch the session data.
 
