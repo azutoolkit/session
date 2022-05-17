@@ -1,5 +1,7 @@
 # Session
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/9a663614a1844a188270ba015cd14651)](https://app.codacy.com/gh/azutoolkit/session?utm_source=github.com&utm_medium=referral&utm_content=azutoolkit/session&utm_campaign=Badge_Grade_Settings) ![Crystal CI](https://github.com/azutoolkit/session/workflows/Crystal%20CI/badge.svg?branch=master)
+
 A Strongly typed Session Management library to manage application session and state.
 
 HTTP is a stateless protocol, and by default, HTTP requests are independent messages
