@@ -7,6 +7,15 @@ on:
     branches: [master]
 
 jobs:
+  codacy-analysis-cli:
+    name: Codacy Analysis CLI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@main
+
+      - name: Run Codacy Analysis CLI
+        uses: codacy/codacy-analysis-cli-action@master
   build:
     runs-on: ubuntu-latest
 
@@ -29,3 +38,5 @@ jobs:
 
       - name: Run tests
         run: crystal spec --error-trace
+        env:
+          REDIS_HOST: redis

@@ -3,7 +3,7 @@ require "./spec_helper"
 describe Session::Manager do
   managers = {
     memory: Session::MemoryStore(UserSession).provider,
-    redis:  Session::RedisStore(UserSession).provider(client: Redis.new),
+    redis:  Session::RedisStore(UserSession).provider(client: REDIS_CLIENT),
   }
 
   stores = {

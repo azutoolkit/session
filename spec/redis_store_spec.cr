@@ -2,8 +2,7 @@ require "./spec_helper"
 
 describe Session::RedisStore do
   session = Session::SessionId(UserSession).new
-  client = Redis.new
-  redis_store = Session::RedisStore(UserSession).new client
+  redis_store = Session::RedisStore(UserSession).new REDIS_CLIENT
   key = session.session_id
 
   it "persists sessions in redis" do
