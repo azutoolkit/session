@@ -52,7 +52,7 @@ The Session shard is ideal for storing user data:
    ```yaml
    dependencies:
      session:
-       github: your-github-user/session
+       github: azutoolkit/session
    ```
 
 2. Run `shards install`
@@ -111,7 +111,7 @@ MyApp.session.clear            # Removes all the sessions from store
 
 - [ ] DbStore - Add Database session storage for PG, MySQL
 - [ ] MongoStore - Add Mongo Database session storage
-- [ ] CookieStore - Add Cookie Storage session storage
+- [ ] CookieStore - Add Cookie Storage session storage (Must encrypt/decrypt value)
 - [x] Session Created Event - Add event on session created
 - [x] Session Deleted Event - Add event on session deleted
 
