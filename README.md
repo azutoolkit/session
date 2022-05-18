@@ -65,8 +65,8 @@ require "session"
 Session.configure do
   timeout = 1.hour
   session_key = "_session"
-  on_started = ->(sid : String) { puts "Session started - #{sid}" }
-  on_deleted = ->(sid : String) { puts "Session Revoke - #{sid}" }
+  on_started = ->(sid : String, data : Databag) { puts "Session started - #{sid}" }
+  on_deleted = ->(sid : String, data : Databag) { puts "Session Revoke - #{sid}" }
 end
 
 # Type safe session contents
