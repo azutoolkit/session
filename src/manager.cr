@@ -15,6 +15,8 @@ module Session
     def delete
       @store.delete session_id
       @current_session = SessionId(T).new
+    ensure
+      Session.config.on_deleted.call session_id
     end
 
     # Creates the session cookie
@@ -57,6 +59,9 @@ module Session
     # Data is generic
     def create
       @current_session = SessionId(T).new
+      @current_session
+    ensure
+      Session.config.on_started.call session_id
     end
 
     def session_id
