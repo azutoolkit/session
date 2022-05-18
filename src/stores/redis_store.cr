@@ -30,7 +30,7 @@ module Session
       end
     end
 
-    def set(key : String, session : SessionId(T)) : SessionId(T)
+    def []=(key : String, session : SessionId(T)) : SessionId(T)
       @client.setex prefixed(key), timeout.total_seconds.to_i, session.to_json
       session
     end

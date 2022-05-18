@@ -18,7 +18,7 @@ module Session
       sessions[key]?
     end
 
-    def set(key : String, session : SessionId(T)) : SessionId(T)
+    def []=(key : String, session : SessionId(T)) : SessionId(T)
       sessions[key] = session
     end
 

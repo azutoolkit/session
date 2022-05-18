@@ -16,7 +16,7 @@ module Session
       @store.delete session_id
       @current_session = SessionId(T).new
     ensure
-      Session.config.on_deleted.call session_id, current_session.data
+      on :started, session_id, current_session.data
     end
 
     # Creates the session cookie
@@ -29,6 +29,9 @@ module Session
         http_only: true,
         creation_time: Time.local,
       )
+    ensure
+      # Persists the session to store
+      @store[session_id] = current_session
     end
 
     # Gets a session by Session Id, throws Key not found
@@ -61,7 +64,7 @@ module Session
       @current_session = SessionId(T).new
       @current_session
     ensure
-      Session.config.on_started.call session_id, current_session.data
+      on :started, session_id, current_session.data
     end
 
     def session_id

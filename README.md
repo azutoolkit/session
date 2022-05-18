@@ -103,8 +103,9 @@ MyApp.session[]?               # Gets session by Session Id or returns nil
 MyApp.session.clear            # Removes all the sessions from store
 ```
 
-> **Note:** Session also offers a _HTTP Handler_ `Session::SessionHandler` to help
-> http app load and send session data to HTTP Clients :rocket:
+> **Note:** Session also offers a _HTTP Handler_ `Session::SessionHandler` to
+> automatically enable session management for the Application. Each request that
+> passes through the Session Handlers resets the timeout for the cookie
 
 ## Roadmap - Help Wanted
 

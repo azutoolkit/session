@@ -6,7 +6,7 @@ describe Session::MemoryStore do
   key = session.session_id
 
   it "persists sessions in memory" do
-    memory_store.set(key, session).should eq session
+    (memory_store[key] = session).should eq session
   end
 
   it "gets session by id" do
@@ -25,11 +25,11 @@ describe Session::MemoryStore do
 
   it "returns the total number of active sessions" do
     memory_store.clear
-    memory_store.set key, session
+    memory_store[key] = session
     memory_store.size.should eq 1
 
     expired = Session::SessionId(UserSession).new
-    memory_store.set key, expired
+    memory_store[key] = expired
     memory_store.size.should eq 1
   end
 end

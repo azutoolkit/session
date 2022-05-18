@@ -6,7 +6,7 @@ describe Session::RedisStore do
   key = session.session_id
 
   it "persists sessions in redis" do
-    redis_store.set(key, session).should eq session
+    (redis_store[key] = session).should eq session
   end
 
   it "gets session by id" do
@@ -26,11 +26,11 @@ describe Session::RedisStore do
   it "returns the total number of active sessions" do
     redis_store.clear
     redis_store.size.should eq 0
-    redis_store.set key, session
+    redis_store[key] = session
     redis_store.size.should eq 1
 
     expired = Session::SessionId(UserSession).new
-    redis_store.set key, expired
+    redis_store[key] = expired
     redis_store.size.should eq 1
   end
 end
