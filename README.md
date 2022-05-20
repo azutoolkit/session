@@ -68,9 +68,9 @@ end
 
 The memory store uses server memory and is the default for the session configuration.
 
-We don't recommend using this store in production. Every session will be stored in MEMORY, and entries will not be removed upon expiration unless you create a task responsible for cleaning up old entries.
+We don't recommend using this store in production. Every session will be stored in MEMORY, and the shard will not remove session entries upon expiration unless you create a task responsible for cleaning up expired entries.
 
-Also, sessions are not shared between servers.
+Also, multiple servers cannot share the stored sessions.
 
 ```crystal
 module MyApp
@@ -133,11 +133,32 @@ MyApp.session.clear            # Removes all the sessions from store
 > automatically enable session management for the Application. Each request that
 > passes through the Session Handlers resets the timeout for the cookie
 
+## Session HTTP Handler
+
+A very simple HTTP handler enables session management for an HTTP application that writes and reads session cookies.
+
+```crystal
+module Session
+  class SessionHandler
+    include HTTP::Handler
+
+    def initialize(@session : Session::Provider)
+    end
+
+    def call(context : HTTP::Server::Context)
+      @session.load_from context.request.cookies
+      call_next(context)
+      @session.set_cookies context.response.cookies
+    end
+  end
+end
+```
+
 ## Roadmap - Help Wanted
 
 - [ ] DbStore - Add Database session storage for PG, MySQL
 - [ ] MongoStore - Add Mongo Database session storage
-- [ ] CookieStore - Add Cookie Storage session storage (Must encrypt/decrypt value)
+- [x] CookieStore - Add Cookie Storage session storage (Must encrypt/decrypt value)
 - [x] Session Created Event - Add event on session created
 - [x] Session Deleted Event - Add event on session deleted
 
