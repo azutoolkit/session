@@ -6,13 +6,9 @@ module Session
     end
 
     def call(context : HTTP::Server::Context)
-      @session.load_from session_cookie(context)
+      @session.load_from context.request.cookies
       call_next(context)
-      context.response.cookies << @session.cookie
-    end
-
-    def session_cookie(context)
-      context.request.cookies[@session.session_key]
+      @session.set_cookies context.response.cookies
     end
   end
 end

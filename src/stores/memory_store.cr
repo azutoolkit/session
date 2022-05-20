@@ -1,8 +1,5 @@
 module Session
-  class MemoryStore(T)
-    include Store(T)
-    include Provider
-
+  class MemoryStore(T) < Store(T)
     getter sessions = {} of String => SessionId(T)
 
     # Gets the session manager store type

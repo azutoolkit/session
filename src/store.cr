@@ -1,11 +1,6 @@
 module Session
-  module Store(T)
-    macro included
-      def self.provider(**args) : Manager(T)
-        store = new(**args)
-        Manager(T).new(store)
-      end
-    end
+  abstract class Store(T)
+    include Provider
 
     abstract def [](key : String) : SessionId(T)
     abstract def []?(key : String) : SessionId(T)?
@@ -13,5 +8,9 @@ module Session
     abstract def delete(key : String)
     abstract def size : Int64
     abstract def clear
+
+    def self.provider(**args) : Store(T)
+      new(**args)
+    end
   end
 end

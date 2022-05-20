@@ -6,6 +6,6 @@ end
 
 describe Session do
   it "returns a session manager" do
-    App.session.should be_a Session::Manager(UserSession)
+    App.session.should be_a Session::Provider
   end
 end

@@ -8,6 +8,8 @@ module Session
     property data : T
     getter expires_at : Time
 
+    forward_missing_to data
+
     def initialize
       @expires_at = timeout
       @data = T.new

@@ -2,48 +2,9 @@
 
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/9a663614a1844a188270ba015cd14651)](https://app.codacy.com/gh/azutoolkit/session?utm_source=github.com&utm_medium=referral&utm_content=azutoolkit/session&utm_campaign=Badge_Grade_Settings) ![Crystal CI](https://github.com/azutoolkit/session/workflows/Crystal%20CI/badge.svg?branch=master)
 
-A Strongly typed Session Management library to manage application session and state.
+A Strongly typed Session Management library to manage application sessions and state.
 
-HTTP is a stateless protocol, and by default, HTTP requests are independent messages
-that don't retain user values. However, Session shard implements several approaches
-to bind and store user state data between requests.
-
-The Session shard uses a store maintained by the app to persist data across requests from
-a client. The session data is backed by a cache and considered ephemeral data.
-The site should continue to function without the session data. Critical application
-data should be stored in the user database and cached in session only as a
-performance optimization.
-
-A cookie provides the Session state to the client that contains the session ID.
-
-The cookie session ID:
-
-- The client sends the session cookie to the app on each request is then
-  used to reconstruct the session
-- The app uses the session cookie to fetch the session data.
-
-Session state exhibits the following behaviors:
-
-- The session cookie is specific to the client or browser and not
-  shared across clients
-- When the browser session ends, the client cookie is deleted.
-- Empty sessions are not persisted.
-- The session must have at least one value set to persist across requests.
-  When a session data is empty new session ID is generated for each request.
-
-The app retains a session for a limited time after the last request. After that,
-the app either sets the session timeout or uses the default value of 20 minutes.
-
-The Session shard is ideal for storing user data:
-
-- That's specific to a particular session where the data doesn't require
-  permanent storage across sessions.
-- Deletes session data either when the App invokes the `YourApp.session.delete` or
-  when the session expires.
-- There's no default mechanism to inform app code that a client browser has been
-  closed or when the session cookie is deleted or expired on the client.
-- Session state cookies are not marked essential by default. Session state isn't
-  functional unless the site visitor permits tracking.
+HTTP is a stateless protocol, and by default, HTTP requests are independent messages that don't retain user values. However, Session shard implements several approaches to bind and store user state data between requests.
 
 ## Installation
 
@@ -57,33 +18,99 @@ The Session shard is ideal for storing user data:
 
 2. Run `shards install`
 
-## Usage
+## Configuration
 
 ```crystal
 require "session"
 
-Session.configure do
-  timeout = 1.hour
-  session_key = "_session"
-  on_started = ->(sid : String, data : Databag) { puts "Session started - #{sid}" }
-  on_deleted = ->(sid : String, data : Databag) { puts "Session Revoke - #{sid}" }
+Session.configure do |c|
+  c.timeout = 1.hour
+  c.session_key = "_session"
+  s.secret = "Secret key for encryption"
+  c.on_started = ->(sid : String, data : Databag) { puts "Session started - #{sid}" }
+  c.on_deleted = ->(sid : String, data : Databag) { puts "Session Revoke - #{sid}" }
 end
+```
 
+## Session Stores
+
+The Session shard uses a store maintained by the app to persist data across requests from a client. The session data is backed by a cache and considered ephemeral data.
+
+> **Recommendation:** The site should continue to function without the session data. Critical application data should be stored in the user database and cached in session only as a performance optimization.
+
+The Session shard ships with three forms of session storage out of the box;
+
+CookieStore, MemoryStore, and RedisStore.
+
+### Cookie Store
+
+The CookieStore is based on a Verifier and Encryptor, which encrypts and signs each cookie to ensure it can't be read or tampered with.
+
+Since this store uses crypto features, you must set the `secret` field in the configuration.
+
+```crystal
+Session.configure do |c|
+  ...
+  s.secret = "Secret key for encryption"
+  ...
+end
+```
+
+After the secret is defined, you can instantiate the CookieStore provider
+
+```crystal
+module MyApp
+  class_getter session = Session::CookieStore(UserSession).provider
+end
+```
+
+### Memory Store
+
+The memory store uses server memory and is the default for the session configuration.
+
+We don't recommend using this store in production. Every session will be stored in MEMORY, and entries will not be removed upon expiration unless you create a task responsible for cleaning up old entries.
+
+Also, sessions are not shared between servers.
+
+```crystal
+module MyApp
+  class_getter session = Session::MemoryStore(UserSession).provider
+end
+```
+
+### Redis Store
+
+The RedisStore is recommended for production use as it is highly scalable and is shareable across multiple processes.
+
+```crystal
+module MyApp
+  class_getter session = Session::RedisStore(UserSession).provider(client: Redis.new)
+end
+```
+
+## Accessing Session Data
+
+The Session shard offers type-safe access to the values stored in the session, meaning that to store values in the session, you must first define the object.
+
+The shard calls this object a Databag.
+
+### Databag Object
+
+To define a Databag object
+
+```crystal
 # Type safe session contents
-class UserSession
+struct UserSession
   include Session::Databag
   property username : String? = "example"
 end
+```
 
-# Memory Store
-module MyApp
-  class_getter session = Session::MemoryStore(Databag).provider
-end
+To write and read to and from the `current_session`
 
-# Redis Store
-module MyApp
-  class_getter session = Session::RedisStore(Databag).provider(client: Redis.new)
-end
+```crystal
+MyApp.session.data.username # Reads the value of the username property
+MyApp.session.data.username = "Dark Vader" # Sets the value of the username property
 ```
 
 ### The Session API
@@ -92,7 +119,6 @@ end
 MyApp.session.create           # Creates a new session
 MyApp.session.storage          # Storage Type RedisStore or MemoryStore
 MyApp.session.load_from        # Loads session from Cookie
-MyApp.session.username         # Access databag properties
 MyApp.session.current_session  # Returns the current session
 MyApp.session.session_id       # Returns the current session id
 MyApp.session.delete           # Deletes the current session

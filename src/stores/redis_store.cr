@@ -1,13 +1,7 @@
 require "redis"
 
 module Session
-  class InvalidSessionExeception < Exception
-  end
-
-  class RedisStore(T)
-    include Store(T)
-    include Provider
-
+  class RedisStore(T) < Store(T)
     def initialize(@client : Redis)
     end
 
