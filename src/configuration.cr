@@ -5,6 +5,8 @@ module Session
     property secret : String = "1sxc1aNxGHTTZKlK5cpCgufJAqGM4G13"
     property on_started : Proc(String, Databag, Nil) = ->(sid : String, data : Session::Databag) {}
     property on_deleted : Proc(String, Databag, Nil) = ->(sid : String, data : Session::Databag) {}
+    property on_loaded : Proc(String, Databag, Nil) = ->(sid : String, data : Session::Databag) {}
+    property on_client : Proc(String, Databag, Nil) = ->(sid : String, data : Session::Databag) {}
 
     def encryptor
       Message::Encryptor.new(secret)

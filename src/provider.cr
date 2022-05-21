@@ -29,12 +29,16 @@ module Session
       # Loads the session from a HTTP::Cookie
       def load_from(request_cookies : HTTP::Cookies) : SessionId(T)?
         self.cookies = request_cookies if self.is_a? CookieStore(T)
-        cookie = request_cookies[session_key]
-        @current_session = if store_session = self[cookie.value]?
-                            store_session
-                          else
-                            create
-                          end
+        
+        cookie = request_cookies[session_key]?
+        return  @current_session = create unless cookie
+        @current_session =  if  store_session = self[cookie.value]
+                              store_session
+                            else
+                              create
+                            end
+      ensure
+        on(:loaded, session_id, data)
       end
 
       # Deletes the current session
@@ -51,6 +55,8 @@ module Session
           self.cookies = response_cookies
           self[session_id] = current_session
         end
+      ensure
+        on(:client, session_id, data)
       end
 
       # Creates the session cookie
@@ -84,6 +90,8 @@ module Session
       case event
       when :started then Session.config.on_started.call *args
       when :deleted then Session.config.on_deleted.call *args
+      when :loaded  then Session.config.on_loaded.call *args
+      when :client  then Session.config.on_client.call *args
       else               raise InvalidSessionEventException.new
       end
     end
