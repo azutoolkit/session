@@ -31,8 +31,9 @@ module Session
         self.cookies = request_cookies if self.is_a? CookieStore(T)
         
         cookie = request_cookies[session_key]?
-        return  @current_session = create unless cookie
-        @current_session =  if  store_session = self[cookie.value]
+        return @current_session = create if cookie.nil?
+        
+        @current_session =  if store_session = self[cookie.not_nil!.value]?
                               store_session
                             else
                               create
@@ -52,8 +53,14 @@ module Session
       def set_cookies(response_cookies : HTTP::Cookies)
         response_cookies << cookie
         if self.is_a? CookieStore(T)
-          self.cookies = response_cookies
-          self[session_id] = current_session
+          response_cookies << HTTP::Cookie.new(
+            name: prefixed(self.cookie_name + session_id),
+            value: encrypt_and_sign(current_session.to_json),
+            expires: timeout.from_now,
+            secure: true,
+            http_only: true,
+            creation_time: Time.local,
+          )
         end
       ensure
         on(:client, session_id, data)
