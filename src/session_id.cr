@@ -2,6 +2,7 @@ module Session
   class SessionId(T)
     include JSON::Serializable
 
+    forward_missing_to data
     getter session_id : String = UUID.random.to_s
     getter created_at : Time = Time.local
 
