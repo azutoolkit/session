@@ -29,10 +29,8 @@ module Session
       # Loads the session from a HTTP::Cookie
       def load_from(request_cookies : HTTP::Cookies) : SessionId(T)?
         self.cookies = request_cookies if self.is_a? CookieStore(T)
-        
         cookie = request_cookies[session_key]?
         return @current_session = create if cookie.nil?
-        
         @current_session =  if store_session = self[cookie.not_nil!.value]?
                               store_session
                             else
