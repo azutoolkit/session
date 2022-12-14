@@ -45,7 +45,7 @@ describe Session::Provider do
     end
 
     it "creates a session cookie from current session for #{stores[storage]}" do
-      cookie = provider.cookie
+      cookie = provider.cookie("localhost")
 
       cookie.name.should eq provider.session_key
       cookie.value.should eq provider.session_id

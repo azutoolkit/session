@@ -31,11 +31,11 @@ module Session
         self.cookies = request_cookies if self.is_a? CookieStore(T)
         cookie = request_cookies[session_key]?
         return @current_session = create if cookie.nil?
-        @current_session =  if store_session = self[cookie.not_nil!.value]?
-                              store_session
-                            else
-                              create
-                            end
+        @current_session = if store_session = self[cookie.not_nil!.value]?
+                             store_session
+                           else
+                             create
+                           end
       ensure
         on(:loaded, session_id, data)
       end
@@ -48,14 +48,17 @@ module Session
         on :started, session_id, current_session.data
       end
 
-      def set_cookies(response_cookies : HTTP::Cookies)
-        response_cookies << cookie
+      def set_cookies(response_cookies : HTTP::Cookies, host : String = "")
+        response_cookies << cookie(host)
         if self.is_a? CookieStore(T)
           response_cookies << HTTP::Cookie.new(
             name: prefixed(self.cookie_name + session_id),
             value: encrypt_and_sign(current_session.to_json),
             expires: timeout.from_now,
             secure: true,
+            domain: host,
+            path: "/",
+            samesite: HTTP::Cookie::SameSite::Strict,
             http_only: true,
             creation_time: Time.local,
           )
@@ -65,13 +68,16 @@ module Session
       end
 
       # Creates the session cookie
-      def cookie
+      def cookie(host : String)
         HTTP::Cookie.new(
           name: session_key,
           value: session_id,
           expires: timeout.from_now,
           secure: true,
           http_only: true,
+          domain: host,
+          path: "/",
+          samesite: HTTP::Cookie::SameSite::Strict,
           creation_time: Time.local,
         )
       ensure

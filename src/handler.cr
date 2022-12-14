@@ -8,7 +8,8 @@ module Session
     def call(context : HTTP::Server::Context)
       @session.load_from context.request.cookies
       call_next(context)
-      @session.set_cookies context.response.cookies
+      @session.set_cookies context.response.cookies, context.request.hostname.to_s
+      context
     end
   end
 end
