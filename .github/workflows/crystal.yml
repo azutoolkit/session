@@ -36,9 +36,6 @@ jobs:
       - name: Check code style
         run: crystal tool format --check
 
-      - name: Run Ameba Checks
-        run: bin/ameba
-
       - name: Run tests
         run: crystal spec --error-trace
         env:

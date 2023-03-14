@@ -50,9 +50,12 @@ Since this store uses crypto features, you must set the `secret` field in the co
 
 ```crystal
 Session.configure do |c|
-  ...
-  s.secret = "Secret key for encryption"
-  ...
+  c.timeout = 1.hour
+  c.secret = "Secret key for encryption"
+  c.session_key = "myapp.session"
+  c.provider = Session::CookieStore(Sessions::UserSession).provider
+  c.on_started = ->(sid : String, data : Session::Databag) { puts "Session started - #{sid}" }
+  c.on_deleted = ->(sid : String, data : Session::Databag) { puts "Session Revoke - #{sid}" }
 end
 ```
 
@@ -60,7 +63,9 @@ After the secret is defined, you can instantiate the CookieStore provider
 
 ```crystal
 module MyApp
-  class_getter session = Session::CookieStore(UserSession).provider
+  def self.session
+    Session.session?.not_nil!
+  end
 end
 ```
 
@@ -73,8 +78,8 @@ We don't recommend using this store in production. Every session will be stored 
 Also, multiple servers cannot share the stored sessions.
 
 ```crystal
-module MyApp
-  class_getter session = Session::MemoryStore(UserSession).provider
+Session.configure do |c|
+  c.provider = Session::MemoryStore(UserSession).provider
 end
 ```
 
@@ -83,8 +88,8 @@ end
 The RedisStore is recommended for production use as it is highly scalable and is shareable across multiple processes.
 
 ```crystal
-module MyApp
-  class_getter session = Session::RedisStore(UserSession).provider(client: Redis.new)
+Session.configure do |c|
+  c.provider = Session::RedisStore(UserSession).provider(client: Redis.new)
 end
 ```
 

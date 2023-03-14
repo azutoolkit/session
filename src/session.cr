@@ -11,6 +11,8 @@ require "./session_id"
 require "./stores/*"
 
 module Session
+  Log = ::Log.for("session")
+
   class NotImplementedException < Exception
   end
 
@@ -22,7 +24,7 @@ module Session
 
   CONFIG = Configuration.new
 
-  def self.configure
+  def self.configure(&)
     with CONFIG yield CONFIG
   end
 
@@ -30,7 +32,7 @@ module Session
     CONFIG
   end
 
-  def self.provider
-    CONFIG.provider
+  def self.session
+    CONFIG.session
   end
 end
