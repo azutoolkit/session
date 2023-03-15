@@ -45,7 +45,7 @@ module Session
         delete session_id
         @current_session = SessionId(T).new
       ensure
-        on :started, session_id, current_session.data
+        on :deleted, session_id, current_session.data
       end
 
       def set_cookies(response_cookies : HTTP::Cookies, host : String = "")
