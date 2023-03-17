@@ -1,5 +1,7 @@
 module Session
   module Databag
+    abstract def authenticated? : Bool
+
     macro included
       include JSON::Serializable
 

@@ -7,6 +7,7 @@ REDIS_CLIENT = Redis.new host: REDIS_HOST
 
 class UserSession
   include Session::Databag
+  property? authenticated : Bool = true
   property username : String? = "example"
 end
 
