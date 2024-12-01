@@ -38,9 +38,6 @@ module Session
       session
     end
 
-    def data_cookie
-    end
-
     def delete(key : String)
       cookies.delete prefixed(cookie_name + key)
     end

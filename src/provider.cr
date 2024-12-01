@@ -62,6 +62,7 @@ module Session
 
         if data_cookie = response_cookies[cookie_name]?
           data_cookie.value = encrypt_and_sign(current_session.to_json)
+          data_cookie.expires = timeout.from_now
           response_cookies << data_cookie
         else
           response_cookies << create_data_cookie(cookie_name, host)
