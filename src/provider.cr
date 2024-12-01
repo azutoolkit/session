@@ -17,60 +17,52 @@ module Session
         @current_session.data
       end
 
-      # Creates a new session for the given data
-      # Data is generic
+      # Creates a new session
       def create
         @current_session = SessionId(T).new
+        notify_event(:started)
         @current_session
-      ensure
-        on :started, session_id, current_session.data
       end
 
-      # Loads the session from a HTTP::Cookie
+      # Loads the session from cookies
       def load_from(request_cookies : HTTP::Cookies) : SessionId(T)?
-        self.cookies = request_cookies if self.is_a? CookieStore(T)
+        self.cookies = request_cookies if self.is_a?(CookieStore(T))
         cookie = request_cookies[session_key]?
-        return @current_session = create if cookie.nil?
-        @current_session = if store_session = self[cookie.not_nil!.value]?
-                             store_session
-                           else
-                             create
-                           end
-      ensure
-        on(:loaded, session_id, data)
+        @current_session = cookie ? fetch_session(cookie.value) : create
+        notify_event(:loaded)
+        @current_session
       end
 
       # Deletes the current session
       def delete
-        delete session_id
+        remove_session(session_id)
         @current_session = SessionId(T).new
-      ensure
-        on :deleted, session_id, current_session.data
+        notify_event(:deleted)
       end
 
-      # Sets the session cookie and the session data cookie
-      # if not exists creates a new one
+      # Sets session cookies
       def set_cookies(response_cookies : HTTP::Cookies, host : String = "")
         set_session_id_cookie(response_cookies, host)
-        set_data_cookie(response_cookies, host: host)
-      ensure
-        on(:client, session_id, data)
+        set_data_cookie(response_cookies, host)
+        notify_event(:client)
       end
 
-      def set_data_cookie(response_cookies : HTTP::Cookies, host : String = "", cookie_name : String = "_data_")
-        cookie_name = "#{prefixed(session_id)}.#{cookie_name}"
+      private
 
-        if data_cookie = response_cookies[cookie_name]?
-          data_cookie.value = encrypt_and_sign(current_session.to_json)
-          data_cookie.expires = timeout.from_now
-          response_cookies << data_cookie
-        else
-          response_cookies << create_data_cookie(cookie_name, host)
-        end
+      # Fetches session data or creates a new session
+      def fetch_session(cookie_value : String) : SessionId(T)
+        self[cookie_value]? || create
       end
 
-      def create_data_cookie(cookie_name : String = "", host : String = "")
-        HTTP::Cookie.new(
+      # Removes session by key
+      def remove_session(key : String)
+        delete key
+      end
+
+      # Creates or updates the data cookie
+      def set_data_cookie(response_cookies : HTTP::Cookies, host : String = "")
+        cookie_name = "#{session_key}._data_"
+        cookie = HTTP::Cookie.new(
           name: cookie_name,
           value: encrypt_and_sign(current_session.to_json),
           expires: timeout.from_now,
@@ -79,17 +71,18 @@ module Session
           path: "/",
           samesite: HTTP::Cookie::SameSite::Strict,
           http_only: true,
-          creation_time: Time.local,
+          creation_time: Time.local
         )
+        response_cookies << cookie
       end
 
+      # Creates or updates the session ID cookie
       def set_session_id_cookie(response_cookies : HTTP::Cookies, host : String = "")
-        cookie = response_cookies[session_id]? || cookie(host)
-        response_cookies << cookie(host)
+        response_cookies << create_session_cookie(host)
       end
 
-      # Creates the session cookie
-      def cookie(host : String)
+      # Creates the session ID cookie
+      def create_session_cookie(host : String)
         HTTP::Cookie.new(
           name: session_key,
           value: session_id,
@@ -99,10 +92,16 @@ module Session
           domain: host,
           path: "/",
           samesite: HTTP::Cookie::SameSite::Strict,
-          creation_time: Time.local,
+          creation_time: Time.local
         )
       ensure
         self[session_id] = current_session
+      end
+
+      # Notify about session events
+      def notify_event(event : Symbol)
+        args = [session_id, current_session.data]
+        Session.config.send("on_#{event}").call(*args) if Session.config.responds_to?("on_#{event}")
       end
     end
 
@@ -118,16 +117,6 @@ module Session
       "#{session_key}.#{session_id}"
     end
 
-    def on(event : Symbol, *args)
-      case event
-      when :started then Session.config.on_started.call *args
-      when :deleted then Session.config.on_deleted.call *args
-      when :loaded  then Session.config.on_loaded.call *args
-      when :client  then Session.config.on_client.call *args
-      else               raise InvalidSessionEventException.new
-      end
-    end
-
     def encrypt_and_sign(value)
       Session.config.encryptor.encrypt_and_sign(value)
     end
@@ -136,4 +125,3 @@ module Session
       Session.config.encryptor.verify_and_decrypt(value)
     end
   end
-end
