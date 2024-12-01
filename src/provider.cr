@@ -48,23 +48,43 @@ module Session
         on :deleted, session_id, current_session.data
       end
 
+      # Sets the session cookie and the session data cookie
+      # if not exists creates a new one
       def set_cookies(response_cookies : HTTP::Cookies, host : String = "")
-        response_cookies << cookie(host)
-        if self.is_a? CookieStore(T)
-          response_cookies << HTTP::Cookie.new(
-            name: prefixed(self.cookie_name + session_id),
-            value: encrypt_and_sign(current_session.to_json),
-            expires: timeout.from_now,
-            secure: true,
-            domain: host,
-            path: "/",
-            samesite: HTTP::Cookie::SameSite::Strict,
-            http_only: true,
-            creation_time: Time.local,
-          )
-        end
+        set_session_id_cookie(response_cookies, host)
+        set_data_cookie(response_cookies, host: host)
       ensure
         on(:client, session_id, data)
+      end
+
+      def set_data_cookie(response_cookies : HTTP::Cookies, host : String = "", cookie_name : String = "_data_")
+        cookie_name = "#{prefixed(session_id)}.#{cookie_name}"
+
+        if data_cookie = response_cookies[cookie_name]?
+          data_cookie.value = encrypt_and_sign(current_session.to_json)
+          response_cookies << data_cookie
+        else
+          response_cookies << create_data_cookie(cookie_name, host)
+        end
+      end
+
+      def create_data_cookie(cookie_name : String = "", host : String = "")
+        HTTP::Cookie.new(
+          name: cookie_name,
+          value: encrypt_and_sign(current_session.to_json),
+          expires: timeout.from_now,
+          secure: true,
+          domain: host,
+          path: "/",
+          samesite: HTTP::Cookie::SameSite::Strict,
+          http_only: true,
+          creation_time: Time.local,
+        )
+      end
+
+      def set_session_id_cookie(response_cookies : HTTP::Cookies, host : String = "")
+        cookie = response_cookies[session_id]? || cookie(host)
+        response_cookies << cookie(host)
       end
 
       # Creates the session cookie
