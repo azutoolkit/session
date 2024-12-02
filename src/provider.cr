@@ -84,10 +84,10 @@ module Session
 
       def on(event : Symbol, session_id : String, data : SessionData)
         case event
-        when :started then  Session.config.on_started.call(session_id, data)
-        when :loaded then Session.config.on_loaded.call(session_id, data)
-        when :client then  Session.config.on_client.call(session_id, data)
-        when :deleted then  Session.config.on_deleted.call(session_id, data)
+        when :started then Session.config.on_started.call(session_id, data)
+        when :loaded  then Session.config.on_loaded.call(session_id, data)
+        when :client  then Session.config.on_client.call(session_id, data)
+        when :deleted then Session.config.on_deleted.call(session_id, data)
         else
           raise "Unknown event: #{event}"
         end
