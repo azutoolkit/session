@@ -11,7 +11,7 @@ class UserSession
   property username : String? = "example"
 end
 
-Session.configure do |c|
+Session.configure do
   c.on_started = ->(sid : String, data : Session::Databag) { puts "Session started - Id: #{sid} Username: #{data.username}" }
   c.on_deleted = ->(sid : String, data : Session::Databag) { puts "Session Revoke - Id: #{sid} Username: #{data.username}" }
 end

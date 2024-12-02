@@ -35,9 +35,9 @@ module Message
       if valid_message?(data.to_s, digest.to_s)
         String.new(decode(data.to_s))
       end
-    rescue argument_error : ArgumentError
-      return if argument_error.message =~ %r{invalid base64}
-      raise argument_error
+    rescue ex : ArgumentError
+      return if ex.message =~ %r{invalid base64}
+      raise ex
     end
 
     def verify(signed_message : String) : String
