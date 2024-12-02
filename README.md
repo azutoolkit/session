@@ -6,6 +6,28 @@ A Strongly typed Session Management library to manage application sessions and s
 
 HTTP is a stateless protocol, and by default, HTTP requests are independent messages that don't retain user values. However, Session shard implements several approaches to bind and store user state data between requests.
 
+# Table of contents
+
+- [Session](#session)
+- [Table of contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Configuration](#configuration)
+  - [Session Stores](#session-stores)
+    - [Cookie Store](#cookie-store)
+    - [Memory Store](#memory-store)
+    - [Redis Store](#redis-store)
+  - [Accessing Session Data](#accessing-session-data)
+    - [SessionData Object](#sessiondata-object)
+  - [Security Features](#security-features)
+    - [Authentication](#authentication)
+    - [Compliance](#compliance)
+    - [Session Expiry and Revocation](#session-expiry-and-revocation)
+    - [The Session API](#the-session-api)
+  - [Session HTTP Handler](#session-http-handler)
+  - [Roadmap - Help Wanted](#roadmap---help-wanted)
+  - [Contributing](#contributing)
+  - [Contributors](#contributors)
+
 ## Installation
 
 1. Add the dependency to your `shard.yml`:
@@ -116,6 +138,142 @@ To write and read to and from the `current_session`
 ```crystal
 MyApp.session.data.username # Reads the value of the username property
 MyApp.session.data.username = "Dark Vader" # Sets the value of the username property
+```
+
+## Security Features
+
+### Authentication
+
+The Session shard provides comprehensive authentication capabilities:
+
+```crystal
+struct UserSession
+  include Session::SessionData
+
+  property user_id : Int64?
+  property login_attempts : Int32 = 0
+  property last_login : Time?
+  property mfa_verified : Bool = false
+
+  def authenticated? : Bool
+    !user_id.nil? && (!mfa_required? || mfa_verified)
+  end
+
+  def mfa_required? : Bool
+    # Implement your MFA requirement logic
+    true
+  end
+
+  def increment_login_attempts
+    @login_attempts += 1
+  end
+
+  def reset_login_attempts
+    @login_attempts = 0
+  end
+end
+
+class AuthenticationHandler
+  def login(email : String, password : String)
+    return false if session.data.login_attempts >= 5
+
+    if user = authenticate_user(email, password)
+      session.data.user_id = user.id
+      session.data.last_login = Time.utc
+      session.data.reset_login_attempts
+      true
+    else
+      session.data.increment_login_attempts
+      false
+    end
+  end
+
+  def logout
+    session.delete
+  end
+end
+```
+
+### Compliance
+
+GDPR and HIPAA compliance features:
+
+```crystal
+struct CompliantSession
+  include Session::SessionData
+
+  # Audit logging
+  property last_accessed_at : Time = Time.utc
+  property access_log : Array(AccessLog) = [] of AccessLog
+
+  # Consent management
+  property privacy_policy_accepted : Bool = false
+  property privacy_policy_version : String?
+  property marketing_consent : Bool = false
+
+  # Data encryption
+  property encrypted_data : Hash(String, String) = {} of String => String
+
+  def log_access(action : String, ip_address : String)
+    access_log << AccessLog.new(
+      action: action,
+      ip_address: ip_address,
+      timestamp: Time.utc
+    )
+  end
+
+  def store_encrypted(key : String, value : String)
+    encrypted_data[key] = Encryption.encrypt(value, Session.config.secret)
+  end
+
+  def retrieve_encrypted(key : String) : String?
+    encrypted_data[key]?.try { |v| Encryption.decrypt(v, Session.config.secret) }
+  end
+end
+```
+
+### Session Expiry and Revocation
+
+Comprehensive session management:
+
+```crystal
+struct ExpiringSession
+  include Session::SessionData
+
+  property absolute_timeout : Time
+  property idle_timeout : Time
+  property revoked : Bool = false
+
+  def initialize
+    @absolute_timeout = 24.hours.from_now
+    @idle_timeout = 30.minutes.from_now
+  end
+
+  def valid? : Bool
+    !revoked && Time.utc < absolute_timeout && Time.utc < idle_timeout
+  end
+
+  def extend_idle_timeout
+    @idle_timeout = 30.minutes.from_now
+  end
+
+  def revoke
+    @revoked = true
+  end
+end
+
+# Usage in handlers
+class SessionHandler
+  def handle_request
+    return unless session = current_session
+
+    if session.valid?
+      session.extend_idle_timeout
+    else
+      session.delete
+    end
+  end
+end
 ```
 
 ### The Session API
