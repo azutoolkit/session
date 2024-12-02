@@ -1,14 +1,20 @@
 module Session
   class CookieStore(T) < Store(T)
-    property cookies = HTTP::Cookies.new
+    include Enumerable(HTTP::Cookie)
+
+    property cookies
+
+    def initialize(@cookies : HTTP::Cookies = HTTP::Cookies.new)
+    end
+
+    def each(&block : HTTP::Cookie -> _)
+      cookies.each do |cookie|
+        yield cookie if cookie.name.starts_with?(data_key)
+      end
+    end
 
     def storage : String
       self.class.name
-    end
-
-    def [](key : String) : SessionId(T)
-      data = cookies[prefixed(cookie_name + key)] || raise InvalidSessionExeception.new
-      deserialize_session(data.value)
     end
 
     def [](key : String) : SessionId(T)
@@ -44,16 +50,37 @@ module Session
     end
 
     def size : Int64
-      name = data_key
-      cookies.reduce(0_i64) do |acc, cookie|
-        acc + 1 if cookie.name.starts_width? name
-      end
+      count.to_i64
     end
 
     def clear
-      cookies.each do |cookie|
-        cookies.delete cookie.name if cookie.name.starts_width? name
-      end
+      each { |cookie| cookies.delete(cookie.name) }
+    end
+
+    def create_data_cookie(session : SessionId(T), host : String = "") : HTTP::Cookie
+      HTTP::Cookie.new(
+        name: data_key,
+        value: encrypt_and_sign(session.to_json),
+        expires: timeout.from_now,
+        secure: true,
+        domain: host,
+        path: "/",
+        samesite: HTTP::Cookie::SameSite::Strict,
+        http_only: true,
+        creation_time: Time.local
+      )
+    end
+
+    private def data_key
+      "#{Session.config.session_key}._data_"
+    end
+
+    private def encrypt_and_sign(value)
+      Session.config.encryptor.encrypt_and_sign(value)
+    end
+
+    private def verify_and_decrypt(value)
+      Session.config.encryptor.verify_and_decrypt(value)
     end
   end
 end

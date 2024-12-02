@@ -39,7 +39,7 @@ describe Session::Provider do
 
     it "loads session from valid session cookie for #{stores[storage]}" do
       cookies = HTTP::Cookies.new
-      cookie = provider.session_id_cookie("localhost")
+      cookie = provider.create_session_cookie("localhost")
       cookies << cookie
       provider.set_cookies cookies, "localhost"
 
@@ -49,7 +49,7 @@ describe Session::Provider do
     end
 
     it "creates a session cookie from current session for #{stores[storage]}" do
-      cookie = provider.session_id_cookie("localhost")
+      cookie = provider.create_session_cookie("localhost")
 
       cookie.name.should eq provider.session_key
       cookie.value.should eq provider.session_id

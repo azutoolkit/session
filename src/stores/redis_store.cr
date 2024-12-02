@@ -2,35 +2,34 @@ require "redis"
 
 module Session
   class RedisStore(T) < Store(T)
-    def initialize(@client : Redis)
+    def initialize(@client : Redis = Redis.new)
     end
 
-    # Gets the session manager store type
     def storage : String
       self.class.name
     end
 
     def [](key : String) : SessionId(T)
-      if data = @client.get prefixed(key)
-        SessionId(T).from_json data
+      if data = @client.get(prefixed(key))
+        SessionId(T).from_json(data)
       else
         raise InvalidSessionExeception.new
       end
     end
 
     def []?(key : String) : SessionId(T)?
-      if data = @client.get prefixed(key)
-        SessionId(T).from_json data
+      if data = @client.get(prefixed(key))
+        SessionId(T).from_json(data)
       end
     end
 
     def []=(key : String, session : SessionId(T)) : SessionId(T)
-      @client.setex prefixed(key), timeout.total_seconds.to_i, session.to_json
+      @client.setex(prefixed(key), timeout.total_seconds.to_i, session.to_json)
       session
     end
 
     def delete(key : String)
-      @client.del prefixed(key)
+      @client.del(prefixed(key))
     end
 
     def size : Int64
@@ -38,10 +37,11 @@ module Session
     end
 
     def clear
-      @client.keys(prefixed("*")).each { |k| @client.del k }
+      keys = @client.keys(prefixed("*"))
+      @client.del(keys) unless keys.empty?
     end
 
-    def prefixed(key : String) : String
+    private def prefixed(key : String) : String
       "session:#{key}"
     end
   end

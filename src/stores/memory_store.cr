@@ -1,8 +1,17 @@
 module Session
   class MemoryStore(T) < Store(T)
-    getter sessions = {} of String => SessionId(T)
+    include Enumerable(SessionId(T))
+    getter sessions : Hash(String, SessionId(T))
 
-    # Gets the session manager store type
+    def initialize(@sessions : Hash(String, SessionId(T)) = Hash(String, SessionId(T)).new)
+    end
+
+    def each(&block : SessionId(T) -> _)
+      sessions.each_value do |session|
+        yield session if session.valid?
+      end
+    end
+
     def storage : String
       self.class.name
     end
@@ -24,7 +33,7 @@ module Session
     end
 
     def size : Int64
-      sessions.count { |_, v| v.valid? }.to_i64
+      sessions.size.to_i64
     end
 
     def clear
