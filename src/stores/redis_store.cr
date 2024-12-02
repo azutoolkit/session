@@ -40,5 +40,9 @@ module Session
     def clear
       @client.keys(prefixed("*")).each { |k| @client.del k }
     end
+
+    def prefixed(key : String) : String
+      "session:#{key}"
+    end
   end
 end

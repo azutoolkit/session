@@ -1,5 +1,5 @@
 module Session
-  module Databag
+  module SessionData
     abstract def authenticated? : Bool
 
     macro included
