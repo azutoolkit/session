@@ -28,7 +28,7 @@ module Session
 
       # Loads the session from cookies
       def load_from(request_cookies : HTTP::Cookies) : SessionId(T)?
-        self.cookies = request_cookies
+        self.cookies = request_cookies if self.is_a? CookieStore(T)
         if current_session_id = request_cookies[session_key]?
           session = self[current_session_id.value]?
           @current_session = session if session
@@ -63,7 +63,6 @@ module Session
           http_only: true,
           creation_time: Time.local
         )
-        response_cookies << cookie
       end
 
       # Creates the session cookie
@@ -83,10 +82,15 @@ module Session
         self[session_id] = @current_session
       end
 
-      # Notify about session events
-      def notify_event(event : Symbol)
-        args = [session_id, current_session.data]
-        Session.config.send("on_#{event}").call(*args) if Session.config.responds_to?("on_#{event}")
+      def on(event : Symbol, session_id : String, data : SessionData)
+        case event
+        when :started then  Session.config.on_started.call(session_id, data)
+        when :loaded then Session.config.on_loaded.call(session_id, data)
+        when :client then  Session.config.on_client.call(session_id, data)
+        when :deleted then  Session.config.on_deleted.call(session_id, data)
+        else
+          raise "Unknown event: #{event}"
+        end
       end
     end
 

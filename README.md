@@ -27,8 +27,8 @@ Session.configure do |c|
   c.timeout = 1.hour
   c.session_key = "_session"
   s.secret = "Secret key for encryption"
-  c.on_started = ->(sid : String, data : Databag) { puts "Session started - #{sid}" }
-  c.on_deleted = ->(sid : String, data : Databag) { puts "Session Revoke - #{sid}" }
+  c.on_started = ->(sid : String, data : SessionData) { puts "Session started - #{sid}" }
+  c.on_deleted = ->(sid : String, data : SessionData) { puts "Session Revoke - #{sid}" }
 end
 ```
 
@@ -54,8 +54,8 @@ Session.configure do |c|
   c.secret = "Secret key for encryption"
   c.session_key = "myapp.session"
   c.provider = Session::CookieStore(Sessions::UserSession).provider
-  c.on_started = ->(sid : String, data : Session::Databag) { puts "Session started - #{sid}" }
-  c.on_deleted = ->(sid : String, data : Session::Databag) { puts "Session Revoke - #{sid}" }
+  c.on_started = ->(sid : String, data : Session::SessionData) { puts "Session started - #{sid}" }
+  c.on_deleted = ->(sid : String, data : Session::SessionData) { puts "Session Revoke - #{sid}" }
 end
 ```
 
@@ -97,16 +97,16 @@ end
 
 The Session shard offers type-safe access to the values stored in the session, meaning that to store values in the session, you must first define the object.
 
-The shard calls this object a Databag.
+The shard calls this object a SessionData.
 
-### Databag Object
+### SessionData Object
 
-To define a Databag object
+To define a SessionData object
 
 ```crystal
 # Type safe session contents
 struct UserSession
-  include Session::Databag
+  include Session::SessionData
   property username : String? = "example"
 end
 ```
