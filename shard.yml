@@ -1,14 +1,12 @@
 name: session
-version: 1.0.11
+version: 1.0.12
 authors:
   - Elias J. Perez <eliasjpr@gmail.com>
 crystal: 1.4.1
 license: MIT
-
 dependencies:
   redis:
     github: stefanwille/crystal-redis
-
 development_dependencies:
   ameba:
     github: crystal-ameba/ameba
