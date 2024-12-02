@@ -32,7 +32,6 @@ module Session
 
       def delete
         delete(session_id)
-        self.delete(self.data_key) if self.is_a?(CookieStore(T))
         on(:deleted, session_id, data)
         @current_session = SessionId(T).new
       end
@@ -47,7 +46,7 @@ module Session
 
       def load_from(request_cookies : HTTP::Cookies) : SessionId(T)?
         if self.is_a?(CookieStore(T))
-          cookies = request_cookies
+          self.cookies = request_cookies
         end
 
         if current_session_id = request_cookies[session_key]?
@@ -64,6 +63,7 @@ module Session
           response_cookies << self.create_data_cookie(@current_session, host)
         end
       ensure
+        self[session_id] = @current_session
         on(:client, session_id, data)
       end
 
