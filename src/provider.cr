@@ -110,3 +110,4 @@ module Session
       Session.config.encryptor.verify_and_decrypt(value)
     end
   end
+end
