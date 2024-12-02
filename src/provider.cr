@@ -31,7 +31,8 @@ module Session
       end
 
       def delete
-        delete = session_id
+        delete(session_id)
+        self.delete(self.data_key) if self.is_a?(CookieStore(T))
         on(:deleted, session_id, data)
         @current_session = SessionId(T).new
       end

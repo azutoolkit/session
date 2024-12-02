@@ -71,7 +71,7 @@ module Session
       )
     end
 
-    private def data_key
+    def data_key
       "#{Session.config.session_key}._data_"
     end
 
