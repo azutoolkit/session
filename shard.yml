@@ -1,5 +1,5 @@
 name: session
-version: 1.0.15
+version: 1.0.16
 authors:
   - Elias J. Perez <eliasjpr@gmail.com>
 crystal: 1.4.1
