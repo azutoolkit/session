@@ -50,6 +50,11 @@
 * [Metrics](observability/metrics.md)
 * [Query Interface](observability/query-interface.md)
 
+## Integrations
+
+* [AZU Framework](integrations/azu-framework.md)
+* [HTTP::Server](integrations/http-server.md)
+
 ## API Reference
 
 * [Provider API](api/provider.md)

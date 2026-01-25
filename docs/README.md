@@ -85,6 +85,13 @@ flowchart LR
     Security --> Cluster
 ```
 
+## Framework Integrations
+
+Session integrates with popular Crystal web frameworks:
+
+- **[AZU Framework](integrations/azu-framework.md)** - Type-safe endpoint integration with helper modules
+- **[HTTP::Server](integrations/http-server.md)** - Crystal's built-in HTTP server
+
 ## Getting Started
 
 Continue to the [Installation](getting-started/installation.md) guide to add Session to your project.

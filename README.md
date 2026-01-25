@@ -288,6 +288,8 @@ Full documentation available at [GitBook](https://azutoolkit.gitbook.io/session)
 - [Storage Backends](docs/storage-backends/overview.md)
 - [Clustering Guide](docs/clustering/overview.md)
 - [Security Best Practices](docs/configuration/security.md)
+- [AZU Framework Integration](docs/integrations/azu-framework.md)
+- [HTTP::Server Integration](docs/integrations/http-server.md)
 
 ---
 
