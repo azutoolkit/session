@@ -1,0 +1,290 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Crystal Session Management Library - Cursor Rules
+
+## Project Overview
+This is a strongly-typed session management library for Crystal applications that provides secure, type-safe session handling with multiple storage backends (Memory, Redis, Cookie).
+
+## Architecture Guidelines
+
+### Core Principles
+- **Type Safety First**: Always leverage Crystal's static type system
+- **Security by Design**: Encryption and signing for all sensitive data
+- **Clean Architecture**: Separation of concerns with clear interfaces
+- **Performance**: Efficient memory usage and Redis integration
+
+### Key Components
+
+#### 1. SessionData Interface
+```crystal
+module SessionData
+  abstract def authenticated? : Bool
+
+  macro included
+    include JSON::Serializable
+    # Provides JSON serialization and default constructor
+  end
+end
+```
+
+#### 2. Generic Session Container
+```crystal
+class SessionId(T)
+  property data : T
+  getter session_id : String = UUID.random.to_s
+  getter created_at : Time = Time.local
+  getter expires_at : Time
+end
+```
+
+#### 3. Storage Strategy Pattern
+- `MemoryStore(T)` - In-memory storage (development)
+- `RedisStore(T)` - Redis storage (production)
+- `CookieStore(T)` - Encrypted client-side storage
+
+## Development Rules
+
+### 1. Type Safety
+- Always use generic types: `SessionId(T)`, `Store(T)`, `Provider(T)`
+- Leverage `forward_missing_to data` for clean API
+- Use abstract methods for required interfaces
+- Prefer compile-time errors over runtime errors
+
+### 2. Security Implementation
+- Use AES-256-CBC encryption for sensitive data
+- Implement HMAC-SHA1 signing to prevent tampering
+- Use constant-time comparison for signature verification
+- Set secure cookie attributes: `secure: true`, `http_only: true`, `samesite: :strict`
+
+### 3. Error Handling
+- Use specific exception types: `InvalidSessionException`, `InvalidSessionEventException`
+- Provide meaningful error messages
+- Handle encryption/decryption failures gracefully
+
+### 4. Configuration
+```crystal
+Session.configure do |c|
+  c.timeout = 1.hour
+  c.session_key = "_session"
+  c.secret = "your-secret-key"
+  c.provider = Session::RedisStore(UserSession).provider(client: Redis.new)
+
+  # Event handlers for monitoring
+  c.on_started = ->(sid : String, data : SessionData) { ... }
+  c.on_deleted = ->(sid : String, data : SessionData) { ... }
+end
+```
+
+### 5. HTTP Integration
+- Use `SessionHandler` for automatic session management
+- Use `AuthenticationHandler` for route protection
+- Always set proper cookie attributes
+- Handle session loading/saving in middleware
+
+## Code Style Guidelines
+
+### 1. Crystal Idioms
+- Use `property` and `getter` for instance variables
+- Leverage Crystal's macro system for DRY code
+- Use `forward_missing_to` for delegation
+- Prefer `include` over inheritance for mixins
+
+### 2. Naming Conventions
+- Use `PascalCase` for classes and modules
+- Use `snake_case` for methods and variables
+- Use descriptive names that reflect purpose
+- Prefix private methods with `private def`
+
+### 3. Documentation
+- Document public APIs with clear examples
+- Use Crystal's built-in documentation system
+- Include security considerations in docs
+- Document configuration options
+
+## Testing Guidelines
+
+### 1. Test Structure
+- Test all storage backends (Memory, Redis, Cookie)
+- Test security features (encryption, signing)
+- Test session lifecycle (create, load, delete)
+- Test error conditions and edge cases
+
+### 2. Test Data
+```crystal
+class UserSession
+  include Session::SessionData
+  property? authenticated : Bool = true
+  property username : String? = "example"
+end
+```
+
+### 3. Test Coverage
+- Unit tests for individual components
+- Integration tests for HTTP handlers
+- Security tests for encryption/decryption
+- Performance tests for Redis operations
+
+## Security Best Practices
+
+### 1. Session Management
+- Use cryptographically secure random session IDs (UUID)
+- Implement proper session expiration
+- Provide session revocation capabilities
+- Log session events for audit trails
+
+### 2. Data Protection
+- Encrypt sensitive session data
+- Sign messages to prevent tampering
+- Use secure cookie attributes
+- Implement proper key management
+
+### 3. Compliance
+- Support GDPR compliance features
+- Implement audit logging
+- Provide data deletion capabilities
+- Handle consent management
+
+## Performance Considerations
+
+### 1. Memory Usage
+- Use efficient data structures
+- Implement proper cleanup for expired sessions
+- Monitor memory usage in production
+- Use Redis for distributed sessions
+
+### 2. Redis Optimization
+- Use appropriate TTL for session expiration
+- Implement connection pooling
+- Use pipelining for batch operations
+- Monitor Redis performance metrics
+
+### 3. Cookie Optimization
+- Minimize cookie size
+- Use appropriate expiration times
+- Implement secure transmission
+- Handle cookie limits gracefully
+
+## Common Patterns
+
+### 1. Session Data Definition
+```crystal
+struct UserSession
+  include Session::SessionData
+
+  property user_id : Int64?
+  property username : String?
+  property login_attempts : Int32 = 0
+  property last_login : Time?
+  property mfa_verified : Bool = false
+
+  def authenticated? : Bool
+    !user_id.nil? && (!mfa_required? || mfa_verified)
+  end
+
+  def mfa_required? : Bool
+    # Implement MFA logic
+    true
+  end
+end
+```
+
+### 2. HTTP Handler Usage
+```crystal
+# In your HTTP server
+server = HTTP::Server.new([
+  Session::SessionHandler.new(Session.session),
+  Session::AuthenticationHandler.new(
+    Session.session,
+    "/signin",
+    /^\/(public|assets)/
+  ),
+  # Your application handlers
+])
+```
+
+### 3. Session Operations
+```crystal
+# Create new session
+session = Session.session.create
+
+# Access session data
+session.data.user_id = 123
+session.data.username = "john_doe"
+
+# Check authentication
+if session.data.authenticated?
+  # Handle authenticated user
+end
+
+# Delete session
+session.delete
+```
+
+## Troubleshooting
+
+### 1. Common Issues
+- **Session not persisting**: Check storage backend configuration
+- **Encryption errors**: Verify secret key configuration
+- **Cookie issues**: Check secure/domain settings
+- **Redis connection**: Verify Redis server availability
+
+### 2. Debugging
+- Enable debug logging: `Log.debug { "Session operation" }`
+- Use event handlers for monitoring
+- Check session validity: `session.valid?`
+- Verify session expiration: `session.expired?`
+
+## Future Enhancements
+
+### 1. Planned Features
+- Database storage backends (PostgreSQL, MySQL)
+- MongoDB storage support
+- Enhanced audit logging
+- Session analytics
+
+### 2. Performance Improvements
+- Connection pooling optimization
+- Caching strategies
+- Batch operations
+- Compression for large sessions
+
+## Dependencies
+
+### Required
+- `crystal` >= 1.4.1
+- `redis` (for RedisStore)
+- `uuid` (for session IDs)
+- `openssl` (for encryption)
+
+### Development
+- `spec` (for testing)
+- `ameba` (for linting)
+
+## Contributing
+
+### 1. Code Quality
+- Follow Crystal style guidelines
+- Write comprehensive tests
+- Update documentation
+- Consider security implications
+
+### 2. Pull Request Process
+- Fork the repository
+- Create feature branch
+- Write tests for new features
+- Update documentation
+- Submit pull request
+
+### 3. Security Reporting
+- Report security issues privately
+- Provide detailed reproduction steps
+- Include affected versions
+- Allow time for fixes
+
+
+---
+
+**Remember**: This library prioritizes type safety, security, and performance. Always consider the security implications of any changes and ensure proper testing before deployment.
