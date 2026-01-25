@@ -82,7 +82,7 @@ module Session
     property fail_fast_on_corruption : Bool = true
 
     def session
-      provider.not_nil!
+      provider || raise "Session provider not configured"
     end
 
     def encryptor

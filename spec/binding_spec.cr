@@ -159,11 +159,11 @@ describe Session::SessionBindingException do
   it "includes binding type" do
     ex = Session::SessionBindingException.new("ip")
     ex.binding_type.should eq "ip"
-    ex.message.not_nil!.should contain("ip")
+    ex.message.to_s.should contain("ip")
   end
 
   it "uses custom message" do
     ex = Session::SessionBindingException.new("user_agent", "Custom message")
-    ex.message.not_nil!.should eq "Custom message"
+    ex.message.to_s.should eq "Custom message"
   end
 end

@@ -20,7 +20,7 @@ describe Session::CookieStore do
       # The cookie value should be encrypted, not plain JSON
       cookie = store.cookies[store.data_key]?
       cookie.should_not be_nil
-      cookie.not_nil!.value.should_not contain("session_id")
+      cookie.try(&.value).should_not contain("session_id")
     end
   end
 
@@ -173,8 +173,8 @@ describe Session::CookieSizeExceededException do
 
     ex.actual_size.should eq 5000
     ex.max_size.should eq 4096
-    ex.message.not_nil!.should contain("5000")
-    ex.message.not_nil!.should contain("4096")
+    ex.message.to_s.should contain("5000")
+    ex.message.to_s.should contain("4096")
   end
 
   it "uses default max size" do

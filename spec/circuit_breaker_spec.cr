@@ -156,8 +156,10 @@ describe Session::CircuitBreaker do
 
       time = cb.time_until_retry
       time.should_not be_nil
-      time.not_nil!.total_seconds.should be > 0
-      time.not_nil!.total_seconds.should be <= 30
+      if t = time
+        t.total_seconds.should be > 0
+        t.total_seconds.should be <= 30
+      end
     end
   end
 end
@@ -189,7 +191,7 @@ end
 describe Session::CircuitOpenException do
   it "includes time until retry in message" do
     ex = Session::CircuitOpenException.new(30.seconds)
-    ex.message.not_nil!.should contain("30")
+    ex.message.to_s.should contain("30")
     ex.time_until_retry.should eq 30.seconds
   end
 end

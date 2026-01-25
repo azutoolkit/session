@@ -116,7 +116,7 @@ describe "MemoryStore Error Handling" do
       memory_store.sessions[expired_session.session_id] = expired_session
 
       # Size should still only count valid sessions
-      Session.config.timeout = 1.hour  # Reset before count
+      Session.config.timeout = 1.hour # Reset before count
       memory_store.size.should eq(1)
     end
 

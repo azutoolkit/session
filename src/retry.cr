@@ -216,7 +216,7 @@ module Session
         end
       end
 
-      raise last_exception.not_nil!
+      raise last_exception.as(Exception)
     end
 
     # Retry with custom retry condition
@@ -251,7 +251,7 @@ module Session
         end
       end
 
-      raise last_exception.not_nil!
+      raise last_exception.as(Exception)
     end
 
     private def calculate_delay(attempt : Int32, config : RetryConfig) : Time::Span

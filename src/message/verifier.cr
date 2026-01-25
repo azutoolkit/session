@@ -15,8 +15,9 @@ module Message
 
     # Check if message is valid with fallback digest (for migration)
     def valid_message_with_fallback?(data : String, digest : String) : Bool
-      return false if @fallback_digest.nil?
-      data.size > 0 && digest.size > 0 && Crypto::Subtle.constant_time_compare(digest, generate_digest_with(data, @fallback_digest.not_nil!))
+      fallback = @fallback_digest
+      return false if fallback.nil?
+      data.size > 0 && digest.size > 0 && Crypto::Subtle.constant_time_compare(digest, generate_digest_with(data, fallback))
     end
 
     private def log_fallback_warning

@@ -50,7 +50,7 @@ describe Session::QueryableStore do
 
       result = store.find_first { |s| s.data.username == "target" }
       result.should_not be_nil
-      result.not_nil!.data.username.should eq "target"
+      result.try(&.data.username).should eq "target"
     end
 
     it "returns nil when no match found" do

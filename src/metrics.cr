@@ -113,7 +113,6 @@ module Session
           end
           result
         rescue ex
-          duration = Time.monotonic - start_time
           record_error(store_type, ex.class.name)
           raise ex
         end

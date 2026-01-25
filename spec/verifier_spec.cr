@@ -107,7 +107,7 @@ describe Message::Verifier do
       data = sha256_verifier.verified(old_signed)
       data.should eq "migrate me"
 
-      new_signed = sha256_verifier.generate(data.not_nil!)
+      new_signed = sha256_verifier.generate(data.as(String))
 
       # New signature should verify with SHA256 only
       sha256_only = Message::Verifier.new("secret", digest: :sha256, fallback_digest: nil)
@@ -161,7 +161,7 @@ describe Message::Verifier do
 
       signed = verifier.generate("test")
       json_data = Base64.decode_string(signed)
-      data, digest = Tuple(String, String).from_json(json_data)
+      data, _digest = Tuple(String, String).from_json(json_data)
 
       verifier.valid_message?(data, "wrong-digest").should be_false
     end
