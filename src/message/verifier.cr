@@ -3,11 +3,30 @@ module Message
     class InvalidSignatureError < Exception
     end
 
-    def initialize(@secret : String, @digest = :sha1)
+    # Track if fallback warning has been logged to avoid spam
+    @@fallback_warning_logged : Bool = false
+
+    def initialize(@secret : String, @digest : Symbol = :sha256, @fallback_digest : Symbol? = :sha1)
     end
 
     def valid_message?(data : String, digest : String) : Bool
       data.size > 0 && digest.size > 0 && Crypto::Subtle.constant_time_compare(digest, generate_digest(data))
+    end
+
+    # Check if message is valid with fallback digest (for migration)
+    def valid_message_with_fallback?(data : String, digest : String) : Bool
+      return false if @fallback_digest.nil?
+      data.size > 0 && digest.size > 0 && Crypto::Subtle.constant_time_compare(digest, generate_digest_with(data, @fallback_digest.not_nil!))
+    end
+
+    private def log_fallback_warning
+      return if @@fallback_warning_logged
+      Session::Log.warn {
+        "DEPRECATION: Session verified using legacy #{@fallback_digest} digest. " \
+        "Sessions will be re-signed with #{@digest} on next save. " \
+        "Consider disabling fallback after migration: Session.configure { |c| c.digest_fallback = false }"
+      }
+      @@fallback_warning_logged = true
     end
 
     @[Deprecated("Legacy token verification will be removed in the next release.")]
@@ -24,6 +43,9 @@ module Message
 
       if valid_message?(data.to_s, digest.to_s)
         String.new(decode(data.to_s))
+      elsif valid_message_with_fallback?(data.to_s, digest.to_s)
+        log_fallback_warning
+        String.new(decode(data.to_s))
       end
     rescue JSON::ParseException | Base64::Error
       data, digest = legacy_verified(signed_message)
@@ -33,6 +55,9 @@ module Message
       end
 
       if valid_message?(data.to_s, digest.to_s)
+        String.new(decode(data.to_s))
+      elsif valid_message_with_fallback?(data.to_s, digest.to_s)
+        log_fallback_warning
         String.new(decode(data.to_s))
       end
     rescue ex : ArgumentError
@@ -58,6 +83,9 @@ module Message
 
       if valid_message?(data.to_s, digest.to_s)
         decode(data.to_s)
+      elsif valid_message_with_fallback?(data.to_s, digest.to_s)
+        log_fallback_warning
+        decode(data.to_s)
       else
         raise InvalidSignatureError.new
       end
@@ -77,7 +105,11 @@ module Message
     end
 
     private def generate_digest(data) : String
-      encode(OpenSSL::HMAC.digest(OpenSSL::Algorithm.parse(@digest.to_s), @secret, data))
+      generate_digest_with(data, @digest)
+    end
+
+    private def generate_digest_with(data, algorithm : Symbol) : String
+      encode(OpenSSL::HMAC.digest(OpenSSL::Algorithm.parse(algorithm.to_s), @secret, data))
     end
   end
 end

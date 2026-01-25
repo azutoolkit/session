@@ -1,12 +1,28 @@
 require "json"
+require "openssl"
 
 module Message
   class Encryptor
     getter verifier : Verifier
 
-    def initialize(@secret : String, @cipher_algorithm = "aes-256-cbc", @digest = :sha1)
-      @verifier = Verifier.new(@secret, digest: @digest)
+    # AES-256 requires a 32-byte key
+    KEY_LENGTH = 32
+
+    # Derived key from KDF (when use_kdf is enabled)
+    @derived_key : Bytes? = nil
+
+    def initialize(
+      @secret : String,
+      @cipher_algorithm = "aes-256-cbc",
+      @digest : Symbol = :sha256,
+      @fallback_digest : Symbol? = :sha1,
+      @use_kdf : Bool = false,
+      @kdf_iterations : Int32 = 100_000,
+      @kdf_salt : String = "session_kdf_salt"
+    )
+      @verifier = Verifier.new(@secret, digest: @digest, fallback_digest: @fallback_digest)
       @block_size = 16
+      @derived_key = derive_key if @use_kdf
     end
 
     # Encrypt and sign a message. We need to sign the message in order to avoid
@@ -57,7 +73,26 @@ module Message
     end
 
     private def set_cipher_key(cipher)
-      cipher.key = @secret
+      if @use_kdf
+        if derived = @derived_key
+          cipher.key = derived
+        else
+          cipher.key = @secret
+        end
+      else
+        cipher.key = @secret
+      end
+    end
+
+    # Derive a key from the secret using PBKDF2-SHA256
+    private def derive_key : Bytes
+      OpenSSL::PKCS5.pbkdf2_hmac(
+        @secret,
+        @kdf_salt,
+        iterations: @kdf_iterations,
+        algorithm: OpenSSL::Algorithm::SHA256,
+        key_size: KEY_LENGTH
+      )
     end
   end
 end

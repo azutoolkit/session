@@ -7,7 +7,7 @@ module Session
     getter created_at : Time = Time.local
 
     property data : T
-    getter expires_at : Time
+    property expires_at : Time
 
     forward_missing_to data
 
@@ -17,11 +17,22 @@ module Session
     end
 
     def expired?
-      created_at > expires_at
+      Time.local > expires_at
     end
 
     def valid?
       !expired?
+    end
+
+    # Extend the session expiration time (for sliding expiration)
+    def touch : Nil
+      @expires_at = timeout
+    end
+
+    # Get time remaining until session expires
+    def time_until_expiry : Time::Span
+      remaining = expires_at - Time.local
+      remaining > Time::Span.zero ? remaining : Time::Span.zero
     end
 
     def ==(other : SessionId(T))

@@ -5,9 +5,15 @@ module Session
     macro included
       @mutex : Mutex = Mutex.new
       @current_session : SessionId(T) = SessionId(T).new
+      @flash : Flash = Flash.new
 
       def current_session : SessionId(T)
         @current_session
+      end
+
+      # Access flash messages
+      def flash : Flash
+        @flash
       end
 
       def session_id : String
@@ -36,6 +42,28 @@ module Session
         @current_session = SessionId(T).new
       end
 
+      # Regenerate session ID while preserving session data
+      # Important for security after authentication state changes
+      def regenerate_id : SessionId(T)
+        old_session_id = session_id
+        old_data = @current_session.data
+
+        # Delete the old session
+        delete(old_session_id)
+
+        # Create a new session with the same data
+        @current_session = SessionId(T).new
+        @current_session.data = old_data
+
+        # Store the new session
+        self[session_id] = @current_session
+
+        # Trigger regeneration callback
+        Session.config.on_regenerated.call(old_session_id, session_id, @current_session.data)
+
+        @current_session
+      end
+
       def create : SessionId(T)
         @current_session = SessionId(T).new
         self[session_id] = @current_session
@@ -45,6 +73,9 @@ module Session
       end
 
       def load_from(request_cookies : HTTP::Cookies) : SessionId(T)?
+        # Rotate flash messages at the start of each request
+        @flash.rotate!
+
         if self.is_a?(CookieStore(T))
           self.cookies = request_cookies
         end
@@ -52,6 +83,12 @@ module Session
         if current_session_id = request_cookies[session_key]?
           if session = self[current_session_id.value]?
             @current_session = session
+
+            # Apply sliding expiration if enabled
+            if Session.config.sliding_expiration
+              @current_session.touch
+            end
+
             on(:loaded, session_id, data)
           end
         end
