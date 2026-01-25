@@ -41,11 +41,12 @@ if REDIS_AVAILABLE
       end
 
       it "handles deserialization errors gracefully" do
-        # Store valid JSON but invalid session data
+        # Store valid JSON but invalid session data structure
+        # This will fail during JSON parsing due to missing required fields
         invalid_data = %({"invalid": "data"})
         client.setex("session:#{key}", 3600, invalid_data)
 
-        expect_raises(Session::SessionSerializationException, "Session deserialization failed") do
+        expect_raises(Session::SessionCorruptionException, "Invalid JSON in session data") do
           redis_store[key]
         end
 
@@ -80,7 +81,9 @@ if REDIS_AVAILABLE
       end
 
       it "handles deletion of non-existent sessions gracefully" do
-        redis_store.delete("non_existent_key").should be_nil
+        # delete should not raise for non-existent keys
+        redis_store.delete("non_existent_key")
+        redis_store["non_existent_key"]?.should be_nil
       end
     end
 

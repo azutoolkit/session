@@ -198,7 +198,13 @@ if REDIS_AVAILABLE
 
         sleep(50.milliseconds) # Allow coordinator to start
 
-        # Set up subscriber to capture the message
+        # Store session first (without subscriber listening)
+        session = Session::SessionId(UserSession).new
+        store[session.session_id] = session
+
+        sleep(50.milliseconds) # Allow any messages to clear
+
+        # Now set up subscriber to capture the delete message
         received_message : Session::ClusterMessage? = nil
         subscriber = Redis.new(host: REDIS_HOST)
 
@@ -213,8 +219,6 @@ if REDIS_AVAILABLE
 
         sleep(50.milliseconds) # Allow subscriber to start
 
-        session = Session::SessionId(UserSession).new
-        store[session.session_id] = session
         store.delete(session.session_id)
 
         sleep(100.milliseconds) # Allow message to propagate
@@ -237,6 +241,9 @@ if REDIS_AVAILABLE
         redis = redis_client
         config = Session::ClusterConfig.new(enabled: false, local_cache_enabled: true)
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
+
+        # Clear any existing sessions from previous tests
+        store.clear
 
         # Add multiple sessions
         3.times do
