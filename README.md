@@ -1,341 +1,584 @@
 # Session
 
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/9a663614a1844a188270ba015cd14651)](https://app.codacy.com/gh/azutoolkit/session?utm_source=github.com&utm_medium=referral&utm_content=azutoolkit/session&utm_campaign=Badge_Grade_Settings) ![Crystal CI](https://github.com/azutoolkit/session/workflows/Crystal%20CI/badge.svg?branch=master)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/9a663614a1844a188270ba015cd14651)](https://app.codacy.com/gh/azutoolkit/session?utm_source=github.com&utm_medium=referral&utm_content=azutoolkit/session&utm_campaign=Badge_Grade_Settings)
+![Crystal CI](https://github.com/azutoolkit/session/workflows/Crystal%20CI/badge.svg?branch=master)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A Strongly typed Session Management library to manage application sessions and state.
+**A production-ready, type-safe session management library for Crystal applications.**
 
-HTTP is a stateless protocol, and by default, HTTP requests are independent messages that don't retain user values. However, Session shard implements several approaches to bind and store user state data between requests.
+Session provides enterprise-grade session handling with multiple storage backends, built-in security features, and resilience patterns. Whether you're building a simple web application or a distributed microservices architecture, Session offers the flexibility and reliability your application demands.
 
-# Table of contents
+## Why Session?
 
-- [Session](#session)
-- [Table of contents](#table-of-contents)
-  - [Installation](#installation)
-  - [Configuration](#configuration)
-  - [Session Stores](#session-stores)
-    - [Cookie Store](#cookie-store)
-    - [Memory Store](#memory-store)
-    - [Redis Store](#redis-store)
-  - [Accessing Session Data](#accessing-session-data)
-    - [SessionData Object](#sessiondata-object)
-  - [Security Features](#security-features)
-    - [Authentication](#authentication)
-    - [Compliance](#compliance)
-    - [Session Expiry and Revocation](#session-expiry-and-revocation)
-    - [The Session API](#the-session-api)
-  - [Session HTTP Handler](#session-http-handler)
-  - [Roadmap - Help Wanted](#roadmap---help-wanted)
-  - [Contributing](#contributing)
-  - [Contributors](#contributors)
+- **Type Safety** — Define your session data as Crystal structs with compile-time guarantees
+- **Multiple Backends** — Choose from Cookie, Memory, or Redis storage based on your needs
+- **Security First** — AES-256 encryption, HMAC-SHA256 signatures, and configurable key derivation
+- **Production Ready** — Circuit breakers, retry logic, and graceful degradation built-in
+- **Developer Experience** — Clean API, comprehensive documentation, and 300+ test cases
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Storage Backends](#storage-backends)
+  - [Cookie Store](#cookie-store)
+  - [Memory Store](#memory-store)
+  - [Redis Store](#redis-store)
+- [Core Features](#core-features)
+  - [Type-Safe Session Data](#type-safe-session-data)
+  - [Flash Messages](#flash-messages)
+  - [Session Regeneration](#session-regeneration)
+  - [Sliding Expiration](#sliding-expiration)
+- [Security Features](#security-features)
+  - [Encryption & Signing](#encryption--signing)
+  - [Key Derivation (PBKDF2)](#key-derivation-pbkdf2)
+  - [Client Binding](#client-binding)
+  - [Cookie Size Protection](#cookie-size-protection)
+- [Resilience & Performance](#resilience--performance)
+  - [Circuit Breaker](#circuit-breaker)
+  - [Retry Logic](#retry-logic)
+  - [Data Compression](#data-compression)
+  - [Connection Pooling](#connection-pooling)
+- [Observability](#observability)
+- [HTTP Handler Integration](#http-handler-integration)
+- [API Reference](#api-reference)
+- [Contributing](#contributing)
 
 ## Installation
 
-1. Add the dependency to your `shard.yml`:
+Add the dependency to your `shard.yml`:
 
-   ```yaml
-   dependencies:
-     session:
-       github: azutoolkit/session
-   ```
+```yaml
+dependencies:
+  session:
+    github: azutoolkit/session
+```
 
-2. Run `shards install`
+Then run:
 
-## Configuration
+```bash
+shards install
+```
+
+## Quick Start
 
 ```crystal
 require "session"
 
-Session.configure do |c|
-  c.timeout = 1.hour
-  c.session_key = "_session"
-  s.secret = "Secret key for encryption"
-  c.on_started = ->(sid : String, data : SessionData) { puts "Session started - #{sid}" }
-  c.on_deleted = ->(sid : String, data : SessionData) { puts "Session Revoke - #{sid}" }
+# 1. Define your session data structure
+struct UserSession
+  include Session::SessionData
+  property user_id : Int64?
+  property username : String?
+  property role : String = "guest"
+end
+
+# 2. Configure the session
+Session.configure do |config|
+  config.secret = ENV["SESSION_SECRET"]  # Use a secure 32+ character secret
+  config.timeout = 24.hours
+  config.session_key = "myapp_session"
+  config.provider = Session::MemoryStore(UserSession).provider
+end
+
+# 3. Use sessions in your application
+provider = Session.provider
+session = provider.create
+
+session.data.user_id = 12345
+session.data.username = "alice"
+session.data.role = "admin"
+
+puts session.data.username  # => "alice"
+```
+
+## Configuration
+
+Session provides extensive configuration options to tailor behavior to your application's needs:
+
+```crystal
+Session.configure do |config|
+  # Core settings
+  config.secret = ENV["SESSION_SECRET"]     # Required: encryption key (32+ chars recommended)
+  config.timeout = 1.hour                    # Session lifetime
+  config.session_key = "_session"            # Cookie name
+
+  # Security settings
+  config.use_kdf = true                      # Enable PBKDF2 key derivation
+  config.kdf_iterations = 100_000            # PBKDF2 iteration count
+  config.digest_algorithm = :sha256          # HMAC algorithm (:sha256 or :sha1)
+  config.require_secure_secret = true        # Enforce strong secrets in production
+
+  # Session binding (anti-hijacking)
+  config.bind_to_ip = true                   # Bind sessions to client IP
+  config.bind_to_user_agent = true           # Bind sessions to User-Agent
+
+  # Performance settings
+  config.compress_data = true                # Enable gzip compression
+  config.compression_threshold = 256         # Minimum bytes before compressing
+  config.sliding_expiration = true           # Extend session on each request
+
+  # Redis settings
+  config.encrypt_redis_data = true           # Encrypt data stored in Redis
+
+  # Resilience settings
+  config.enable_retry = true                 # Enable automatic retry on failures
+  config.circuit_breaker_enabled = true      # Enable circuit breaker pattern
+
+  # Lifecycle callbacks
+  config.on_started = ->(sid : String, data : Session::SessionData) {
+    Log.info { "Session created: #{sid}" }
+  }
+  config.on_deleted = ->(sid : String, data : Session::SessionData) {
+    Log.info { "Session destroyed: #{sid}" }
+  }
 end
 ```
 
-## Session Stores
+## Storage Backends
 
-The Session shard uses a store maintained by the app to persist data across requests from a client. The session data is backed by a cache and considered ephemeral data.
-
-> **Recommendation:** The site should continue to function without the session data. Critical application data should be stored in the user database and cached in session only as a performance optimization.
-
-The Session shard ships with three forms of session storage out of the box;
-
-CookieStore, MemoryStore, and RedisStore.
+Session offers three storage backends, each optimized for different use cases.
 
 ### Cookie Store
 
-The CookieStore is based on a Verifier and Encryptor, which encrypts and signs each cookie to ensure it can't be read or tampered with.
+**Best for:** Simple applications, stateless deployments, serverless environments
 
-Since this store uses crypto features, you must set the `secret` field in the configuration.
+The Cookie Store encrypts and signs session data, storing it entirely in the client's browser. Zero server-side storage required.
 
 ```crystal
-Session.configure do |c|
-  c.timeout = 1.hour
-  c.secret = "Secret key for encryption"
-  c.session_key = "myapp.session"
-  c.provider = Session::CookieStore(Sessions::UserSession).provider
-  c.on_started = ->(sid : String, data : Session::SessionData) { puts "Session started - #{sid}" }
-  c.on_deleted = ->(sid : String, data : Session::SessionData) { puts "Session Revoke - #{sid}" }
+Session.configure do |config|
+  config.secret = ENV["SESSION_SECRET"]
+  config.provider = Session::CookieStore(UserSession).provider
 end
 ```
 
-After the secret is defined, you can instantiate the CookieStore provider
-
-```crystal
-module MyApp
-  def self.session
-    Session.session?.not_nil!
-  end
-end
-```
+**Characteristics:**
+- No server-side storage required
+- Automatic encryption (AES-256-CBC) and signing (HMAC-SHA256)
+- 4KB size limit (with automatic validation)
+- Optional gzip compression for larger payloads
 
 ### Memory Store
 
-The memory store uses server memory and is the default for the session configuration.
+**Best for:** Development, testing, single-server deployments
 
-We don't recommend using this store in production. Every session will be stored in MEMORY, and the shard will not remove session entries upon expiration unless you create a task responsible for cleaning up expired entries.
-
-Also, multiple servers cannot share the stored sessions.
+The Memory Store keeps sessions in server memory for fast access.
 
 ```crystal
-Session.configure do |c|
-  c.provider = Session::MemoryStore(UserSession).provider
+Session.configure do |config|
+  config.provider = Session::MemoryStore(UserSession).provider
 end
+```
+
+**Characteristics:**
+- Fastest possible access times
+- Sessions lost on server restart
+- Not suitable for multi-server deployments
+- Built-in expired session cleanup
+
+```crystal
+# Manual cleanup of expired sessions
+memory_store = Session::MemoryStore(UserSession).new
+expired_count = memory_store.cleanup_expired
+
+# Get memory statistics
+stats = memory_store.memory_stats
+puts "Total: #{stats[:total_sessions]}, Valid: #{stats[:valid_sessions]}"
 ```
 
 ### Redis Store
 
-The RedisStore is recommended for production use as it is highly scalable and is shareable across multiple processes.
+**Best for:** Production deployments, distributed systems, high availability
+
+The Redis Store provides persistent, distributed session storage with enterprise features.
 
 ```crystal
-Session.configure do |c|
-  c.provider = Session::RedisStore(UserSession).provider(client: Redis.new)
+Session.configure do |config|
+  config.provider = Session::RedisStore(UserSession).provider(
+    client: Redis.new(host: "localhost", port: 6379)
+  )
+  config.encrypt_redis_data = true  # Optional: encrypt data at rest
 end
 ```
 
-## Accessing Session Data
+**Characteristics:**
+- Persistent across server restarts
+- Shared across multiple application instances
+- Automatic TTL-based expiration
+- Uses SCAN instead of KEYS for production safety
+- Optional data encryption at rest
+- Circuit breaker and retry logic for resilience
 
-The Session shard offers type-safe access to the values stored in the session, meaning that to store values in the session, you must first define the object.
+## Core Features
 
-The shard calls this object a SessionData.
+### Type-Safe Session Data
 
-### SessionData Object
-
-To define a SessionData object
-
-```crystal
-# Type safe session contents
-struct UserSession
-  include Session::SessionData
-  property username : String? = "example"
-end
-```
-
-To write and read to and from the `current_session`
-
-```crystal
-MyApp.session.data.username # Reads the value of the username property
-MyApp.session.data.username = "Dark Vader" # Sets the value of the username property
-```
-
-## Security Features
-
-### Authentication
-
-The Session shard provides comprehensive authentication capabilities:
+Define your session structure as a Crystal struct for compile-time type safety:
 
 ```crystal
 struct UserSession
   include Session::SessionData
 
   property user_id : Int64?
-  property login_attempts : Int32 = 0
-  property last_login : Time?
-  property mfa_verified : Bool = false
+  property username : String?
+  property email : String?
+  property roles : Array(String) = [] of String
+  property preferences : Hash(String, String) = {} of String => String
+  property login_count : Int32 = 0
+  property last_seen : Time?
+
+  def admin? : Bool
+    roles.includes?("admin")
+  end
 
   def authenticated? : Bool
-    !user_id.nil? && (!mfa_required? || mfa_verified)
-  end
-
-  def mfa_required? : Bool
-    # Implement your MFA requirement logic
-    true
-  end
-
-  def increment_login_attempts
-    @login_attempts += 1
-  end
-
-  def reset_login_attempts
-    @login_attempts = 0
-  end
-end
-
-class AuthenticationHandler
-  def login(email : String, password : String)
-    return false if session.data.login_attempts >= 5
-
-    if user = authenticate_user(email, password)
-      session.data.user_id = user.id
-      session.data.last_login = Time.utc
-      session.data.reset_login_attempts
-      true
-    else
-      session.data.increment_login_attempts
-      false
-    end
-  end
-
-  def logout
-    session.delete
+    !user_id.nil?
   end
 end
 ```
 
-### Compliance
+### Flash Messages
 
-GDPR and HIPAA compliance features:
+Flash messages persist for exactly one request—perfect for success notifications, error messages, and redirects:
 
 ```crystal
-struct CompliantSession
-  include Session::SessionData
+provider = Session.provider
 
-  # Audit logging
-  property last_accessed_at : Time = Time.utc
-  property access_log : Array(AccessLog) = [] of AccessLog
+# Set flash messages (available on next request)
+provider.flash["notice"] = "Your changes have been saved."
+provider.flash["error"] = "Please correct the errors below."
 
-  # Consent management
-  property privacy_policy_accepted : Bool = false
-  property privacy_policy_version : String?
-  property marketing_consent : Bool = false
+# In the next request, access flash messages
+provider.flash.now["notice"]  # => "Your changes have been saved."
+provider.flash.now["error"]   # => "Please correct the errors below."
 
-  # Data encryption
-  property encrypted_data : Hash(String, String) = {} of String => String
-
-  def log_access(action : String, ip_address : String)
-    access_log << AccessLog.new(
-      action: action,
-      ip_address: ip_address,
-      timestamp: Time.utc
-    )
-  end
-
-  def store_encrypted(key : String, value : String)
-    encrypted_data[key] = Encryption.encrypt(value, Session.config.secret)
-  end
-
-  def retrieve_encrypted(key : String) : String?
-    encrypted_data[key]?.try { |v| Encryption.decrypt(v, Session.config.secret) }
-  end
-end
+# After accessing, they're automatically cleared
 ```
 
-### Session Expiry and Revocation
+### Session Regeneration
 
-Comprehensive session management:
+Regenerate session IDs after authentication state changes to prevent session fixation attacks:
 
 ```crystal
-struct ExpiringSession
-  include Session::SessionData
+provider = Session.provider
 
-  property absolute_timeout : Time
-  property idle_timeout : Time
-  property revoked : Bool = false
-
-  def initialize
-    @absolute_timeout = 24.hours.from_now
-    @idle_timeout = 30.minutes.from_now
-  end
-
-  def valid? : Bool
-    !revoked && Time.utc < absolute_timeout && Time.utc < idle_timeout
-  end
-
-  def extend_idle_timeout
-    @idle_timeout = 30.minutes.from_now
-  end
-
-  def revoke
-    @revoked = true
-  end
+# After successful login
+def login(user : User)
+  provider.regenerate_id  # New session ID, same data
+  provider.data.user_id = user.id
+  provider.data.username = user.username
 end
 
-# Usage in handlers
-class SessionHandler
-  def handle_request
-    return unless session = current_session
-
-    if session.valid?
-      session.extend_idle_timeout
-    else
-      session.delete
-    end
-  end
+# After logout
+def logout
+  provider.delete  # Destroys the entire session
 end
 ```
 
-### The Session API
+### Sliding Expiration
 
-```Crystal
-MyApp.session.create           # Creates a new session
-MyApp.session.storage          # Storage Type RedisStore or MemoryStore
-MyApp.session.load_from        # Loads session from Cookie
-MyApp.session.current_session  # Returns the current session
-MyApp.session.session_id       # Returns the current session id
-MyApp.session.delete           # Deletes the current session
-MyApp.session.valid?           # Returns true if session has not expired
-MyApp.session.cookie           # Returns a session cookie that can be sent to clients
-MyApp.session[]                # Gets session by Session Id or raises an exception
-MyApp.session[]?               # Gets session by Session Id or returns nil
-MyApp.session.clear            # Removes all the sessions from store
-```
-
-> **Note:** Session also offers a _HTTP Handler_ `Session::SessionHandler` to
-> automatically enable session management for the Application. Each request that
-> passes through the Session Handlers resets the timeout for the cookie
-
-## Session HTTP Handler
-
-A very simple HTTP handler enables session management for an HTTP application that writes and reads session cookies.
+Automatically extend session lifetime on each request to keep active users logged in:
 
 ```crystal
-module Session
-  class SessionHandler
-    include HTTP::Handler
+Session.configure do |config|
+  config.timeout = 30.minutes
+  config.sliding_expiration = true  # Reset timeout on each request
+end
 
-    def initialize(@session : Session::Provider)
-    end
+# Check remaining session time
+session = provider.current_session
+remaining = session.time_until_expiry
+puts "Session expires in #{remaining.total_minutes.to_i} minutes"
+```
 
-    def call(context : HTTP::Server::Context)
-      @session.load_from context.request.cookies
-      call_next(context)
-      @session.set_cookies context.response.cookies
-    end
-  end
+## Security Features
+
+### Encryption & Signing
+
+All session data is protected with industry-standard cryptography:
+
+- **Encryption:** AES-256-CBC with random IV per encryption
+- **Signing:** HMAC-SHA256 (with SHA1 fallback for migration)
+- **Encoding:** URL-safe Base64
+
+```crystal
+Session.configure do |config|
+  config.secret = ENV["SESSION_SECRET"]      # 32+ characters recommended
+  config.digest_algorithm = :sha256          # Use SHA256 for HMAC
+  config.digest_fallback = true              # Allow SHA1 during migration
 end
 ```
 
-## Roadmap - Help Wanted
+### Key Derivation (PBKDF2)
 
-- [ ] DbStore - Add Database session storage for PG, MySQL
-- [ ] MongoStore - Add Mongo Database session storage
-- [x] CookieStore - Add Cookie Storage session storage (Must encrypt/decrypt value)
-- [x] Session Created Event - Add event on session created
-- [x] Session Deleted Event - Add event on session deleted
+Enable PBKDF2 key derivation for enhanced security against brute-force attacks:
+
+```crystal
+Session.configure do |config|
+  config.use_kdf = true              # Enable key derivation
+  config.kdf_iterations = 100_000    # OWASP recommended minimum
+end
+```
+
+### Client Binding
+
+Bind sessions to client characteristics to detect and prevent session hijacking:
+
+```crystal
+Session.configure do |config|
+  config.bind_to_ip = true          # Validate client IP matches
+  config.bind_to_user_agent = true  # Validate User-Agent matches
+end
+```
+
+When a mismatch is detected, the session is automatically invalidated and a new one is created.
+
+### Cookie Size Protection
+
+The Cookie Store automatically validates cookie size to prevent silent failures:
+
+```crystal
+# Automatically raises CookieSizeExceededException if data exceeds 4KB
+begin
+  store[session.session_id] = large_session
+rescue Session::CookieSizeExceededException => e
+  Log.error { "Session too large: #{e.actual_size} bytes (max: #{e.max_size})" }
+end
+```
+
+## Resilience & Performance
+
+### Circuit Breaker
+
+Protect your application from cascading failures with the circuit breaker pattern:
+
+```crystal
+Session.configure do |config|
+  config.circuit_breaker_enabled = true
+  config.circuit_breaker_config = Session::CircuitBreakerConfig.new(
+    failure_threshold: 5,        # Open circuit after 5 failures
+    reset_timeout: 30.seconds,   # Try again after 30 seconds
+    half_open_max_calls: 1       # Allow 1 test request in half-open state
+  )
+end
+```
+
+**States:**
+- **Closed:** Normal operation, requests flow through
+- **Open:** Failures exceeded threshold, requests fail fast
+- **Half-Open:** Testing recovery, limited requests allowed
+
+### Retry Logic
+
+Automatic retry with exponential backoff for transient failures:
+
+```crystal
+Session.configure do |config|
+  config.enable_retry = true
+  config.retry_config = Session::RetryConfig.new(
+    max_attempts: 3,                    # Maximum retry attempts
+    base_delay: 100.milliseconds,       # Initial delay
+    max_delay: 5.seconds,               # Maximum delay cap
+    backoff_multiplier: 2.0,            # Exponential backoff factor
+    jitter: 0.1                         # Random jitter (±10%)
+  )
+end
+```
+
+### Data Compression
+
+Reduce storage size and network transfer with automatic gzip compression:
+
+```crystal
+Session.configure do |config|
+  config.compress_data = true
+  config.compression_threshold = 256  # Only compress data larger than 256 bytes
+end
+
+# Check compression effectiveness
+original = session_data.to_json
+compressed = Session::Compression.compress(original)
+ratio = Session::Compression.compression_ratio(original, compressed)
+puts "Compression ratio: #{(ratio * 100).round(1)}%"
+```
+
+### Connection Pooling
+
+For high-traffic applications, use connection pooling with Redis:
+
+```crystal
+pool = Session::ConnectionPool.new(
+  size: 10,
+  timeout: 5.seconds
+) { Redis.new(host: "localhost") }
+
+store = Session::PooledRedisStore(UserSession).new(pool)
+```
+
+## Observability
+
+### Metrics
+
+Plug in your own metrics backend for monitoring session operations:
+
+```crystal
+# Use the built-in log backend
+Session.configure do |config|
+  config.metrics_backend = Session::Metrics::LogBackend.new
+end
+
+# Or implement your own
+class PrometheusBackend < Session::Metrics::Backend
+  def increment(metric : String, tags : Hash(String, String) = {} of String => String)
+    # Push to Prometheus
+  end
+
+  def timing(metric : String, duration : Time::Span, tags : Hash(String, String) = {} of String => String)
+    # Record timing histogram
+  end
+
+  def gauge(metric : String, value : Float64, tags : Hash(String, String) = {} of String => String)
+    # Set gauge value
+  end
+end
+
+Session.configure do |config|
+  config.metrics_backend = PrometheusBackend.new
+end
+```
+
+### Query Interface
+
+Query and manage sessions programmatically:
+
+```crystal
+store = Session::MemoryStore(UserSession).new
+
+# Iterate all valid sessions
+store.each_session do |session|
+  puts "User: #{session.data.username}"
+end
+
+# Find sessions matching criteria
+admin_sessions = store.find_by { |s| s.data.roles.includes?("admin") }
+
+# Bulk delete sessions
+deleted = store.bulk_delete { |s| s.data.user_id == compromised_user_id }
+puts "Revoked #{deleted} sessions"
+
+# Get all session IDs
+all_ids = store.all_session_ids
+```
+
+## HTTP Handler Integration
+
+Integrate Session into your HTTP pipeline with the built-in handler:
+
+```crystal
+require "http/server"
+
+# Configure session
+Session.configure do |config|
+  config.secret = ENV["SESSION_SECRET"]
+  config.provider = Session::MemoryStore(UserSession).provider
+end
+
+# Create the handler chain
+session_handler = Session::SessionHandler.new(Session.provider)
+
+server = HTTP::Server.new([
+  session_handler,
+  YourApplicationHandler.new,
+])
+
+server.listen(8080)
+```
+
+The handler automatically:
+- Loads session from request cookies
+- Validates session binding (if enabled)
+- Handles corrupted/expired sessions gracefully
+- Sets updated session cookie on response
+- Extends session lifetime (if sliding expiration enabled)
+
+## API Reference
+
+### Provider Methods
+
+```crystal
+provider = Session.provider
+
+provider.create                    # Create a new session
+provider.delete                    # Destroy the current session
+provider.regenerate_id             # Generate new session ID (keeps data)
+provider.valid?                    # Check if session is valid
+provider.session_id                # Get current session ID
+provider.current_session           # Get current SessionId object
+provider.data                      # Access session data (type-safe)
+provider.flash                     # Access flash messages
+
+provider.load_from(cookies)        # Load session from HTTP cookies
+provider.set_cookies(cookies)      # Set session cookie in response
+provider.create_session_cookie     # Generate a session cookie
+
+provider[session_id]               # Get session by ID (raises if not found)
+provider[session_id]?              # Get session by ID (returns nil if not found)
+provider.clear                     # Remove all sessions from store
+```
+
+### Session Object
+
+```crystal
+session = provider.current_session
+
+session.session_id                 # Unique session identifier
+session.data                       # Your SessionData struct
+session.created_at                 # When the session was created
+session.expires_at                 # When the session expires
+session.valid?                     # Check if not expired
+session.expired?                   # Check if expired
+session.time_until_expiry          # Time remaining until expiration
+session.touch                      # Extend expiration (sliding expiration)
+```
+
+## Roadmap
+
+- [ ] PostgreSQL session store
+- [ ] MySQL session store
+- [ ] MongoDB session store
+- [ ] Session clustering and synchronization
+- [x] Cookie-based storage with encryption
+- [x] Redis storage with SCAN optimization
+- [x] Circuit breaker pattern
+- [x] Flash messages
+- [x] Session regeneration
+- [x] Client binding (IP/User-Agent)
+- [x] Data compression
+- [x] Metrics integration
 
 ## Contributing
 
-Contributions, issues, and feature requests are welcome!
-Give a ⭐️ if you like this project!
+We welcome contributions! Here's how to get started:
 
-1. Fork it (<https://github.com/azutoolkit/session/fork>)
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create a new Pull Request
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Write tests for your changes
+4. Ensure all tests pass (`crystal spec`)
+5. Commit your changes (`git commit -am 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+Please ensure your code follows the existing style and includes appropriate test coverage.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributors
 
-- [Elias J. Perez](https://github.com/azutoolkit) - creator and maintainer
+- [Elias J. Perez](https://github.com/eliasjpr) - Creator and maintainer
+
+---
+
+**Give a ⭐️ if Session helps your project!**
