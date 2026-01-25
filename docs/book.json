@@ -1,0 +1,28 @@
+{
+  "title": "Session - Crystal Session Management",
+  "description": "A production-ready, type-safe session management library for Crystal applications",
+  "author": "Elias J. Perez",
+  "language": "en",
+  "gitbook": ">=3.0.0",
+  "root": ".",
+  "structure": {
+    "readme": "README.md",
+    "summary": "SUMMARY.md"
+  },
+  "plugins": [
+    "mermaid-gb3"
+  ],
+  "pluginsConfig": {
+    "mermaid-gb3": {
+      "theme": "default"
+    }
+  },
+  "links": {
+    "sidebar": {
+      "GitHub": "https://github.com/azutoolkit/session"
+    }
+  },
+  "styles": {
+    "website": "styles/website.css"
+  }
+}
