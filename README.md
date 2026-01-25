@@ -40,6 +40,10 @@ Session provides enterprise-grade session handling with multiple storage backend
   - [Retry Logic](#retry-logic)
   - [Data Compression](#data-compression)
   - [Connection Pooling](#connection-pooling)
+- [Clustering](#clustering)
+  - [Clustered Redis Store](#clustered-redis-store)
+  - [Local Cache](#local-cache)
+  - [Multi-Node Setup](#multi-node-setup)
 - [Observability](#observability)
 - [HTTP Handler Integration](#http-handler-integration)
 - [API Reference](#api-reference)
@@ -416,6 +420,108 @@ pool = Session::ConnectionPool.new(
 store = Session::PooledRedisStore(UserSession).new(pool)
 ```
 
+## Clustering
+
+Session supports multi-node deployments with Redis Pub/Sub for session invalidation and local caching for performance.
+
+### Clustered Redis Store
+
+The `ClusteredRedisStore` wraps `RedisStore` with local caching and cluster-wide invalidation:
+
+```crystal
+Session.configure do |config|
+  config.secret = ENV["SESSION_SECRET"]
+
+  # Enable clustering
+  config.cluster.enabled = true
+  config.cluster.node_id = ENV["NODE_ID"]? || UUID.random.to_s
+  config.cluster.local_cache_ttl = 30.seconds
+  config.cluster.local_cache_max_size = 10_000
+
+  # Use clustered store
+  config.provider = Session::ClusteredRedisStore(UserSession).new(
+    client: Redis.new(host: "redis.example.com")
+  )
+end
+```
+
+**How it works:**
+
+```mermaid
+flowchart LR
+    subgraph Node_A["Node A"]
+        A_Cache["Local Cache"]
+        A_Store["Redis Store"]
+    end
+    subgraph Node_B["Node B"]
+        B_Cache["Local Cache"]
+        B_Store["Redis Store"]
+    end
+    Redis[("Shared Redis")]
+    PubSub["Pub/Sub"]
+
+    A_Cache --> A_Store --> Redis
+    B_Cache --> B_Store --> Redis
+    A_Store -.->|"invalidate"| PubSub
+    PubSub -.->|"evict"| B_Cache
+```
+
+### Local Cache
+
+Sessions are cached locally to reduce Redis load:
+
+```crystal
+# Configure cache settings
+config.cluster.local_cache_enabled = true
+config.cluster.local_cache_ttl = 30.seconds      # Cache entry lifetime
+config.cluster.local_cache_max_size = 10_000     # Max cached sessions
+
+# Access cache statistics
+store = Session.provider.as(Session::ClusteredRedisStore(UserSession))
+stats = store.cache_stats
+
+puts "Hit rate: #{(stats.hit_rate * 100).round(1)}%"
+puts "Cache size: #{stats.size}"
+puts "Evictions: #{stats.evictions}"
+```
+
+### Multi-Node Setup
+
+For production deployments with multiple application instances:
+
+```crystal
+Session.configure do |config|
+  config.secret = ENV["SESSION_SECRET"]
+
+  # Unique node identifier (use pod name in Kubernetes)
+  config.cluster.enabled = true
+  config.cluster.node_id = ENV["POD_NAME"]? || ENV["HOSTNAME"]? || UUID.random.to_s
+  config.cluster.channel = "myapp:session:invalidate"
+
+  config.provider = Session::ClusteredRedisStore(UserSession).new(
+    client: Redis.new(url: ENV["REDIS_URL"])
+  )
+end
+
+# Graceful shutdown
+at_exit do
+  if store = Session.config.provider.as?(Session::ClusteredRedisStore(UserSession))
+    store.shutdown
+  end
+end
+```
+
+**Cluster Configuration Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `false` | Enable Pub/Sub synchronization |
+| `node_id` | Random UUID | Unique identifier for this node |
+| `channel` | `"session:cluster:invalidate"` | Redis Pub/Sub channel |
+| `local_cache_enabled` | `true` | Enable local caching |
+| `local_cache_ttl` | `30.seconds` | Cache entry lifetime |
+| `local_cache_max_size` | `10_000` | Maximum cached sessions |
+
 ## Observability
 
 ### Metrics
@@ -547,7 +653,7 @@ session.touch                      # Extend expiration (sliding expiration)
 - [ ] PostgreSQL session store
 - [ ] MySQL session store
 - [ ] MongoDB session store
-- [ ] Session clustering and synchronization
+- [x] Session clustering and synchronization
 - [x] Cookie-based storage with encryption
 - [x] Redis storage with SCAN optimization
 - [x] Circuit breaker pattern

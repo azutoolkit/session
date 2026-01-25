@@ -39,6 +39,7 @@ def reset_config
   Session.config.bind_to_ip = false
   Session.config.bind_to_user_agent = false
   Session.config.metrics_backend = Session::Metrics::NullBackend.new
+  Session.config.cluster = Session::ClusterConfig.new
 end
 
 Spec.before_each do

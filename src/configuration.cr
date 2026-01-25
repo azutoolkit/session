@@ -1,10 +1,36 @@
 module Session
+  # Cluster configuration for multi-node deployments
+  # Defined here to be available for Configuration class
+  class ClusterConfig
+    property enabled : Bool = false
+    property node_id : String = UUID.random.to_s
+    property channel : String = "session:cluster:invalidate"
+    property local_cache_enabled : Bool = true
+    property local_cache_ttl : Time::Span = 30.seconds
+    property local_cache_max_size : Int32 = 10_000
+    property subscribe_timeout : Time::Span = 5.seconds
+
+    def initialize(
+      @enabled : Bool = false,
+      @node_id : String = UUID.random.to_s,
+      @channel : String = "session:cluster:invalidate",
+      @local_cache_enabled : Bool = true,
+      @local_cache_ttl : Time::Span = 30.seconds,
+      @local_cache_max_size : Int32 = 10_000,
+      @subscribe_timeout : Time::Span = 5.seconds
+    )
+    end
+  end
+
   class Configuration
     DEFAULT_SECRET = "1sxc1aNxGHTTZKlK5cpCgufJAqGM4G13"
 
     property timeout : Time::Span = 1.hour
     property session_key : String = "_session"
     property secret : String = DEFAULT_SECRET
+
+    # Cluster configuration for multi-node deployments with Redis Pub/Sub
+    property cluster : ClusterConfig = ClusterConfig.new
 
     # Security: require a secure secret (non-default) - raises if default secret is used
     property require_secure_secret : Bool = false

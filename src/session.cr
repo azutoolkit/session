@@ -12,9 +12,10 @@ require "./flash"
 require "./binding"
 require "./configuration"
 require "./session_id"
-require "./stores/*"
 require "./retry"
 require "./connection_pool"
+require "./cluster"
+require "./stores/*"
 
 module Session
   Log = ::Log.for("session")
@@ -80,6 +81,25 @@ module Session
 
     def initialize(@binding_type : String, message : String? = nil, cause : Exception? = nil)
       super(message || "Session binding validation failed for #{binding_type}", cause)
+    end
+  end
+
+  # Cluster-related exceptions
+  class ClusterException < Exception
+    def initialize(message : String = "Cluster operation failed", cause : Exception? = nil)
+      super(message, cause)
+    end
+  end
+
+  class ClusterConnectionException < ClusterException
+    def initialize(message : String = "Cluster connection failed", cause : Exception? = nil)
+      super(message, cause)
+    end
+  end
+
+  class ClusterSubscriptionException < ClusterException
+    def initialize(message : String = "Cluster subscription failed", cause : Exception? = nil)
+      super(message, cause)
     end
   end
 
