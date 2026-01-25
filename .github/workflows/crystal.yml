@@ -34,7 +34,7 @@ jobs:
         run: shards install
 
       - name: Check code style
-        run: crystal tool format --check
+        run: crystal tool format ./src ./spec --check
 
       - name: Run tests
         run: crystal spec --error-trace
