@@ -60,49 +60,45 @@ class SessionManager
 
   # Example: Create session with error handling
   def create_user_session(user_id : Int64, username : String) : Bool
+    session = @session.create
+    session.data.user_id = user_id
+    session.data.username = username
+    session.data.last_login = Time.utc
+    session.data.reset_login_attempts
 
-      session = @session.create
-      session.data.user_id = user_id
-      session.data.username = username
-      session.data.last_login = Time.utc
-      session.data.reset_login_attempts
-
-      Log.info { "Created session for user #{username}" }
-      true
-    rescue ex : Session::SessionValidationException
-      Log.error { "Failed to create session: #{ex.message}" }
-      false
-    rescue ex : Session::StorageConnectionException
-      Log.error { "Storage connection failed: #{ex.message}" }
-      false
-    rescue ex : Exception
-      Log.error { "Unexpected error creating session: #{ex.message}" }
-      false
-
+    Log.info { "Created session for user #{username}" }
+    true
+  rescue ex : Session::SessionValidationException
+    Log.error { "Failed to create session: #{ex.message}" }
+    false
+  rescue ex : Session::StorageConnectionException
+    Log.error { "Storage connection failed: #{ex.message}" }
+    false
+  rescue ex : Exception
+    Log.error { "Unexpected error creating session: #{ex.message}" }
+    false
   end
 
   # Example: Load session with error handling
   def load_user_session : UserSession?
-
-      @session.load_from(HTTP::Cookies.new) # In real app, pass actual cookies
-      @session.data
-    rescue ex : Session::SessionExpiredException
-      Log.info { "Session expired, creating new session" }
-      create_new_session
-    rescue ex : Session::SessionCorruptionException
-      Log.warn { "Session corrupted, clearing and creating new session" }
-      clear_corrupted_session
-      create_new_session
-    rescue ex : Session::SessionNotFoundException
-      Log.info { "No session found, creating new session" }
-      create_new_session
-    rescue ex : Session::StorageConnectionException
-      Log.error { "Storage connection failed: #{ex.message}" }
-      nil
-    rescue ex : Exception
-      Log.error { "Unexpected error loading session: #{ex.message}" }
-      nil
-
+    @session.load_from(HTTP::Cookies.new) # In real app, pass actual cookies
+    @session.data
+  rescue ex : Session::SessionExpiredException
+    Log.info { "Session expired, creating new session" }
+    create_new_session
+  rescue ex : Session::SessionCorruptionException
+    Log.warn { "Session corrupted, clearing and creating new session" }
+    clear_corrupted_session
+    create_new_session
+  rescue ex : Session::SessionNotFoundException
+    Log.info { "No session found, creating new session" }
+    create_new_session
+  rescue ex : Session::StorageConnectionException
+    Log.error { "Storage connection failed: #{ex.message}" }
+    nil
+  rescue ex : Exception
+    Log.error { "Unexpected error loading session: #{ex.message}" }
+    nil
   end
 
   # Example: Update session with retry logic
@@ -131,32 +127,28 @@ class SessionManager
 
   # Example: Delete session with error handling
   def delete_user_session : Bool
-
-      @session.delete
-      Log.info { "Deleted user session" }
-      true
-    rescue ex : Session::StorageConnectionException
-      Log.warn { "Storage connection failed during deletion: #{ex.message}" }
-      # Session will expire naturally, so this is not critical
-      true
-    rescue ex : Exception
-      Log.warn { "Error deleting session: #{ex.message}" }
-      false
-
+    @session.delete
+    Log.info { "Deleted user session" }
+    true
+  rescue ex : Session::StorageConnectionException
+    Log.warn { "Storage connection failed during deletion: #{ex.message}" }
+    # Session will expire naturally, so this is not critical
+    true
+  rescue ex : Exception
+    Log.warn { "Error deleting session: #{ex.message}" }
+    false
   end
 
   # Example: Check session health
   def check_session_health : Bool
-
-      if store = @session.as?(Session::RedisStore(UserSession))
-        store.healthy?
-      else
-        true # Memory store is always healthy
-      end
-    rescue ex : Exception
-      Log.warn { "Health check failed: #{ex.message}" }
-      false
-
+    if store = @session.as?(Session::RedisStore(UserSession))
+      store.healthy?
+    else
+      true # Memory store is always healthy
+    end
+  rescue ex : Exception
+    Log.warn { "Health check failed: #{ex.message}" }
+    false
   end
 
   # Example: Clean up expired sessions (for memory store)
@@ -189,21 +181,17 @@ class SessionManager
   end
 
   private def create_new_session : UserSession?
-
-      @session.create
-      @session.data
-    rescue ex : Exception
-      Log.error { "Failed to create new session: #{ex.message}" }
-      nil
-
+    @session.create
+    @session.data
+  rescue ex : Exception
+    Log.error { "Failed to create new session: #{ex.message}" }
+    nil
   end
 
   private def clear_corrupted_session
-
-      @session.delete
-    rescue ex : Exception
-      Log.warn { "Failed to clear corrupted session: #{ex.message}" }
-
+    @session.delete
+  rescue ex : Exception
+    Log.warn { "Failed to clear corrupted session: #{ex.message}" }
   end
 end
 
