@@ -291,7 +291,7 @@ describe "Integration Error Handling & Resilience" do
       )
 
       # Test that the system maintains reasonable performance during errors
-      start_time = Time.monotonic
+      start_time = Time.instant
 
       # Simulate multiple error scenarios
       10.times do
@@ -304,7 +304,7 @@ describe "Integration Error Handling & Resilience" do
         end
       end
 
-      elapsed = Time.monotonic - start_time
+      elapsed = Time.instant - start_time
       # Should complete within reasonable time (adjust threshold as needed)
       elapsed.should be < 5.seconds
     end

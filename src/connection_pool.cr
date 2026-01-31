@@ -134,6 +134,7 @@ module Session
 
     getter pool : ConnectionPool
     getter circuit_breaker : CircuitBreaker?
+    property current_session : SessionId(T) = SessionId(T).new
 
     def initialize(@pool : ConnectionPool)
       if Session.config.circuit_breaker_enabled
@@ -226,7 +227,7 @@ module Session
         loop do
           result = client.scan(cursor, match: pattern, count: 100)
           cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::Value))
+          keys = result[1].as(Array(Redis::RedisValue))
           count += keys.size.to_i64
           break if cursor == "0"
         end
@@ -245,7 +246,7 @@ module Session
         loop do
           result = client.scan(cursor, match: pattern, count: 100)
           cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::Value))
+          keys = result[1].as(Array(Redis::RedisValue))
 
           unless keys.empty?
             string_keys = keys.map(&.as(String))
@@ -276,7 +277,7 @@ module Session
         loop do
           result = client.scan(cursor, match: pattern, count: 100)
           cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::Value))
+          keys = result[1].as(Array(Redis::RedisValue))
 
           keys.each do |key|
             key_str = key.as(String)
@@ -296,38 +297,39 @@ module Session
     def bulk_delete(&predicate : SessionId(T) -> Bool) : Int64
       count = 0_i64
 
-      @pool.with_connection do |client|
-        cursor = "0"
-        pattern = prefixed("*")
+      begin
+        @pool.with_connection do |client|
+          cursor = "0"
+          pattern = prefixed("*")
 
-        loop do
-          result = client.scan(cursor, match: pattern, count: 100)
-          cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::Value))
-          keys_to_delete = [] of String
+          loop do
+            result = client.scan(cursor, match: pattern, count: 100)
+            cursor = result[0].as(String)
+            keys = result[1].as(Array(Redis::RedisValue))
+            keys_to_delete = [] of String
 
-          keys.each do |key|
-            key_str = key.as(String)
-            session_key = key_str.sub("session:", "")
-            if session = self[session_key]?
-              if predicate.call(session)
-                keys_to_delete << key_str
+            keys.each do |key|
+              key_str = key.as(String)
+              session_key = key_str.sub("session:", "")
+              if session = self[session_key]?
+                if predicate.call(session)
+                  keys_to_delete << key_str
+                end
               end
             end
-          end
 
-          unless keys_to_delete.empty?
-            client.del(keys_to_delete)
-            count += keys_to_delete.size.to_i64
-          end
+            unless keys_to_delete.empty?
+              client.del(keys_to_delete)
+              count += keys_to_delete.size.to_i64
+            end
 
-          break if cursor == "0"
+            break if cursor == "0"
+          end
         end
+      rescue ex : Exception
+        Log.warn { "Error bulk deleting sessions: #{ex.message}" }
       end
 
-      count
-    rescue ex : Exception
-      Log.warn { "Error bulk deleting sessions: #{ex.message}" }
       count
     end
 
@@ -341,7 +343,7 @@ module Session
         loop do
           result = client.scan(cursor, match: pattern, count: 100)
           cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::Value))
+          keys = result[1].as(Array(Redis::RedisValue))
 
           keys.each do |key|
             key_str = key.as(String)

@@ -157,7 +157,7 @@ describe "Error Handling & Resilience" do
         jitter: 0.0 # No jitter for predictable testing
       )
 
-      start_time = Time.monotonic
+      start_time = Time.instant
       attempts = 0
 
       Session::Retry.with_retry(config) do
@@ -169,7 +169,7 @@ describe "Error Handling & Resilience" do
         end
       end
 
-      elapsed = Time.monotonic - start_time
+      elapsed = Time.instant - start_time
       # Should have delays of ~100ms and ~200ms
       elapsed.should be >= 300.milliseconds
     end

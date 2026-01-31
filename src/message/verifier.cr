@@ -30,14 +30,6 @@ module Message
       @@fallback_warning_logged = true
     end
 
-    @[Deprecated("Legacy token verification will be removed in the next release.")]
-    def legacy_verified(signed_message : String)
-      data, digest = signed_message.split("--", 2)
-      {data, digest}
-    rescue IndexError
-      {nil, nil}
-    end
-
     def verified(signed_message : String) : String?
       json_data = ::Base64.decode_string(signed_message)
       data, digest = Tuple(String, String).from_json(json_data)
@@ -49,7 +41,11 @@ module Message
         String.new(decode(data.to_s))
       end
     rescue JSON::ParseException | Base64::Error
-      data, digest = legacy_verified(signed_message)
+      begin
+        data, digest = signed_message.split("--", 2)
+      rescue IndexError
+        return nil
+      end
 
       if (data && digest).nil?
         return nil
@@ -75,7 +71,11 @@ module Message
         json_data = ::Base64.decode_string(signed_message)
         data, digest = Tuple(String, String).from_json(json_data)
       rescue JSON::ParseException | Base64::Error
-        data, digest = legacy_verified(signed_message)
+        begin
+          data, digest = signed_message.split("--", 2)
+        rescue IndexError
+          data, digest = nil, nil
+        end
       end
 
       if (data && digest).nil?

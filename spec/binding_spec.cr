@@ -128,6 +128,125 @@ describe Session::ClientFingerprint do
     end
   end
 
+  describe "#validate!" do
+    it "passes when IP matches" do
+      Session.config.bind_to_ip = true
+      Session.config.bind_to_user_agent = false
+
+      headers = HTTP::Headers{"X-Forwarded-For" => "10.0.0.1"}
+      request = HTTP::Request.new("GET", "/", headers)
+
+      fingerprint = Session::ClientFingerprint.from_request(request)
+
+      # Same IP should not raise
+      fingerprint.validate!(request)
+    end
+
+    it "raises SessionBindingException when IP mismatches" do
+      Session.config.bind_to_ip = true
+      Session.config.bind_to_user_agent = false
+
+      original_headers = HTTP::Headers{"X-Forwarded-For" => "10.0.0.1"}
+      original_request = HTTP::Request.new("GET", "/", original_headers)
+
+      fingerprint = Session::ClientFingerprint.from_request(original_request)
+
+      different_headers = HTTP::Headers{"X-Forwarded-For" => "10.0.0.2"}
+      different_request = HTTP::Request.new("GET", "/", different_headers)
+
+      expect_raises(Session::SessionBindingException, "Session IP address mismatch") do
+        fingerprint.validate!(different_request)
+      end
+    end
+
+    it "passes when User-Agent matches" do
+      Session.config.bind_to_ip = false
+      Session.config.bind_to_user_agent = true
+
+      headers = HTTP::Headers{"User-Agent" => "TestAgent/1.0"}
+      request = HTTP::Request.new("GET", "/", headers)
+
+      fingerprint = Session::ClientFingerprint.from_request(request)
+
+      fingerprint.validate!(request)
+    end
+
+    it "raises SessionBindingException when User-Agent mismatches" do
+      Session.config.bind_to_ip = false
+      Session.config.bind_to_user_agent = true
+
+      original_headers = HTTP::Headers{"User-Agent" => "TestAgent/1.0"}
+      original_request = HTTP::Request.new("GET", "/", original_headers)
+
+      fingerprint = Session::ClientFingerprint.from_request(original_request)
+
+      different_headers = HTTP::Headers{"User-Agent" => "DifferentAgent/2.0"}
+      different_request = HTTP::Request.new("GET", "/", different_headers)
+
+      expect_raises(Session::SessionBindingException, "Session User-Agent mismatch") do
+        fingerprint.validate!(different_request)
+      end
+    end
+
+    it "skips IP check when bind_to_ip is false" do
+      Session.config.bind_to_ip = false
+      Session.config.bind_to_user_agent = false
+
+      # Manually create a fingerprint with an ip_hash
+      fingerprint = Session::ClientFingerprint.new(ip_hash: "some_hash")
+
+      # Different IP should not raise since binding is disabled
+      headers = HTTP::Headers{"X-Forwarded-For" => "99.99.99.99"}
+      request = HTTP::Request.new("GET", "/", headers)
+
+      fingerprint.validate!(request)
+    end
+
+    it "skips UA check when bind_to_user_agent is false" do
+      Session.config.bind_to_ip = false
+      Session.config.bind_to_user_agent = false
+
+      fingerprint = Session::ClientFingerprint.new(user_agent_hash: "some_hash")
+
+      headers = HTTP::Headers{"User-Agent" => "Anything"}
+      request = HTTP::Request.new("GET", "/", headers)
+
+      fingerprint.validate!(request)
+    end
+
+    it "raises when request has no IP header but fingerprint has ip_hash" do
+      Session.config.bind_to_ip = true
+      Session.config.bind_to_user_agent = false
+
+      original_headers = HTTP::Headers{"X-Forwarded-For" => "10.0.0.1"}
+      original_request = HTTP::Request.new("GET", "/", original_headers)
+      fingerprint = Session::ClientFingerprint.from_request(original_request)
+
+      # Request with no IP headers
+      request = HTTP::Request.new("GET", "/")
+
+      expect_raises(Session::SessionBindingException, "Session IP address mismatch") do
+        fingerprint.validate!(request)
+      end
+    end
+
+    it "raises when request has no User-Agent but fingerprint has ua_hash" do
+      Session.config.bind_to_ip = false
+      Session.config.bind_to_user_agent = true
+
+      original_headers = HTTP::Headers{"User-Agent" => "TestAgent/1.0"}
+      original_request = HTTP::Request.new("GET", "/", original_headers)
+      fingerprint = Session::ClientFingerprint.from_request(original_request)
+
+      # Request with no User-Agent header
+      request = HTTP::Request.new("GET", "/")
+
+      expect_raises(Session::SessionBindingException, "Session User-Agent mismatch") do
+        fingerprint.validate!(request)
+      end
+    end
+  end
+
   describe "JSON serialization" do
     it "serializes to JSON" do
       fingerprint = Session::ClientFingerprint.new(

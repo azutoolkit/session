@@ -3,6 +3,7 @@ require "../store"
 module Session
   class CookieStore(T) < Store(T)
     include Enumerable(HTTP::Cookie)
+    property current_session : SessionId(T) = SessionId(T).new
 
     property cookies
 

@@ -3,6 +3,7 @@ module Session
     include Enumerable(SessionId(T))
     include QueryableStore(T)
     getter sessions : Hash(String, SessionId(T))
+    property current_session : SessionId(T) = SessionId(T).new
 
     def initialize(@sessions : Hash(String, SessionId(T)) = Hash(String, SessionId(T)).new)
     end

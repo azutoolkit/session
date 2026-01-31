@@ -1,15 +1,11 @@
 module Session
   module Provider
     abstract def storage : String
+    abstract def current_session
 
     macro included
       @mutex : Mutex = Mutex.new
-      @current_session : SessionId(T) = SessionId(T).new
       @flash : Flash = Flash.new
-
-      def current_session : SessionId(T)
-        @current_session
-      end
 
       # Access flash messages
       def flash : Flash
@@ -17,15 +13,15 @@ module Session
       end
 
       def session_id : String
-        @current_session.session_id
+        current_session.session_id
       end
 
       def valid? : Bool
-        @current_session.valid?
+        current_session.valid?
       end
 
       def data
-        @current_session.data
+        current_session.data
       end
 
       def timeout
@@ -39,35 +35,35 @@ module Session
       def delete
         delete(session_id)
         on(:deleted, session_id, data)
-        @current_session = SessionId(T).new
+        self.current_session = SessionId(T).new
       end
 
       # Regenerate session ID while preserving session data
       # Important for security after authentication state changes
       def regenerate_id : SessionId(T)
         old_session_id = session_id
-        old_data = @current_session.data
+        old_data = current_session.data
 
         # Delete the old session
         delete(old_session_id)
 
         # Create a new session with the same data
-        @current_session = SessionId(T).new
-        @current_session.data = old_data
+        self.current_session = SessionId(T).new
+        current_session.data = old_data
 
         # Store the new session
-        self[session_id] = @current_session
+        self[session_id] = current_session
 
         # Trigger regeneration callback
-        Session.config.on_regenerated.call(old_session_id, session_id, @current_session.data)
+        Session.config.on_regenerated.call(old_session_id, session_id, current_session.data)
 
-        @current_session
+        current_session
       end
 
       def create : SessionId(T)
-        @current_session = SessionId(T).new
-        self[session_id] = @current_session
-        @current_session
+        self.current_session = SessionId(T).new
+        self[session_id] = current_session
+        current_session
       ensure
         on(:started, session_id, current_session.data)
       end
@@ -82,11 +78,11 @@ module Session
 
         if current_session_id = request_cookies[session_key]?
           if session = self[current_session_id.value]?
-            @current_session = session
+            self.current_session = session
 
             # Apply sliding expiration if enabled
             if Session.config.sliding_expiration
-              @current_session.touch
+              current_session.touch
             end
 
             on(:loaded, session_id, data)
@@ -97,10 +93,10 @@ module Session
       def set_cookies(response_cookies : HTTP::Cookies, host : String = "") : Nil
         response_cookies << create_session_cookie(host) unless response_cookies[session_id]?
         if self.is_a?(CookieStore(T))
-          response_cookies << self.create_data_cookie(@current_session, host)
+          response_cookies << self.create_data_cookie(current_session, host)
         end
       ensure
-        self[session_id] = @current_session
+        self[session_id] = current_session
         on(:client, session_id, data)
       end
 

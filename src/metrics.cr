@@ -101,10 +101,10 @@ module Session
       end
 
       def time_operation(store_type : String, operation : String, &block : -> T) : T forall T
-        start_time = Time.monotonic
+        start_time = Time.instant
         begin
           result = yield
-          duration = Time.monotonic - start_time
+          duration = Time.instant - start_time
           case operation
           when "load"
             record_load_time(store_type, duration)
