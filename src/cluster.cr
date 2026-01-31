@@ -25,7 +25,7 @@ module Session
       @type : ClusterMessageType,
       @session_id : String,
       @node_id : String,
-      @timestamp : Time = Time.utc
+      @timestamp : Time = Time.utc,
     )
     end
   end

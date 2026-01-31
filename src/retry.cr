@@ -15,7 +15,7 @@ module Session
     def initialize(
       @failure_threshold : Int32 = 5,
       @reset_timeout : Time::Span = 30.seconds,
-      @half_open_max_calls : Int32 = 1
+      @half_open_max_calls : Int32 = 1,
     )
     end
   end
@@ -182,7 +182,7 @@ module Session
       @base_delay : Time::Span = 100.milliseconds,
       @max_delay : Time::Span = 5.seconds,
       @backoff_multiplier : Float64 = 2.0,
-      @jitter : Float64 = 0.1
+      @jitter : Float64 = 0.1,
     )
     end
   end

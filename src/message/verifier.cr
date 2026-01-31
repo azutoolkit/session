@@ -33,13 +33,7 @@ module Message
     def verified(signed_message : String) : String?
       json_data = ::Base64.decode_string(signed_message)
       data, digest = Tuple(String, String).from_json(json_data)
-
-      if valid_message?(data.to_s, digest.to_s)
-        String.new(decode(data.to_s))
-      elsif valid_message_with_fallback?(data.to_s, digest.to_s)
-        log_fallback_warning
-        String.new(decode(data.to_s))
-      end
+      decode_verified(data.to_s, digest.to_s)
     rescue JSON::ParseException | Base64::Error
       begin
         data, digest = signed_message.split("--", 2)
@@ -47,16 +41,8 @@ module Message
         return nil
       end
 
-      if (data && digest).nil?
-        return nil
-      end
-
-      if valid_message?(data.to_s, digest.to_s)
-        String.new(decode(data.to_s))
-      elsif valid_message_with_fallback?(data.to_s, digest.to_s)
-        log_fallback_warning
-        String.new(decode(data.to_s))
-      end
+      return nil if (data && digest).nil?
+      decode_verified(data.to_s, digest.to_s)
     rescue ex : ArgumentError
       return if ex.message =~ %r{invalid base64}
       raise ex
@@ -95,6 +81,15 @@ module Message
     def generate(value : String | Bytes) : String
       data = encode(value)
       encode({data, generate_digest(data)}.to_json)
+    end
+
+    private def decode_verified(data : String, digest : String) : String?
+      if valid_message?(data, digest)
+        String.new(decode(data))
+      elsif valid_message_with_fallback?(data, digest)
+        log_fallback_warning
+        String.new(decode(data))
+      end
     end
 
     private def encode(data) : String

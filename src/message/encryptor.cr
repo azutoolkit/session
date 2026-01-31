@@ -18,7 +18,7 @@ module Message
       @fallback_digest : Symbol? = :sha1,
       @use_kdf : Bool = false,
       @kdf_iterations : Int32 = 100_000,
-      @kdf_salt : String = "session_kdf_salt"
+      @kdf_salt : String = "session_kdf_salt",
     )
       @verifier = Verifier.new(@secret, digest: @digest, fallback_digest: @fallback_digest)
       @block_size = 16

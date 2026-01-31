@@ -60,7 +60,7 @@ class SessionManager
 
   # Example: Create session with error handling
   def create_user_session(user_id : Int64, username : String) : Bool
-    begin
+
       session = @session.create
       session.data.user_id = user_id
       session.data.username = username
@@ -78,12 +78,12 @@ class SessionManager
     rescue ex : Exception
       Log.error { "Unexpected error creating session: #{ex.message}" }
       false
-    end
+
   end
 
   # Example: Load session with error handling
   def load_user_session : UserSession?
-    begin
+
       @session.load_from(HTTP::Cookies.new) # In real app, pass actual cookies
       @session.data
     rescue ex : Session::SessionExpiredException
@@ -102,7 +102,7 @@ class SessionManager
     rescue ex : Exception
       Log.error { "Unexpected error loading session: #{ex.message}" }
       nil
-    end
+
   end
 
   # Example: Update session with retry logic
@@ -131,7 +131,7 @@ class SessionManager
 
   # Example: Delete session with error handling
   def delete_user_session : Bool
-    begin
+
       @session.delete
       Log.info { "Deleted user session" }
       true
@@ -142,12 +142,12 @@ class SessionManager
     rescue ex : Exception
       Log.warn { "Error deleting session: #{ex.message}" }
       false
-    end
+
   end
 
   # Example: Check session health
   def check_session_health : Bool
-    begin
+
       if store = @session.as?(Session::RedisStore(UserSession))
         store.healthy?
       else
@@ -156,7 +156,7 @@ class SessionManager
     rescue ex : Exception
       Log.warn { "Health check failed: #{ex.message}" }
       false
-    end
+
   end
 
   # Example: Clean up expired sessions (for memory store)
@@ -189,21 +189,21 @@ class SessionManager
   end
 
   private def create_new_session : UserSession?
-    begin
+
       @session.create
       @session.data
     rescue ex : Exception
       Log.error { "Failed to create new session: #{ex.message}" }
       nil
-    end
+
   end
 
   private def clear_corrupted_session
-    begin
+
       @session.delete
     rescue ex : Exception
       Log.warn { "Failed to clear corrupted session: #{ex.message}" }
-    end
+
   end
 end
 

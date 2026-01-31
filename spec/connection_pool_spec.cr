@@ -64,7 +64,7 @@ if REDIS_AVAILABLE
       config = Session::ConnectionPoolConfig.new(size: 2, redis_host: REDIS_HOST)
       pool = Session::ConnectionPool.new(config)
 
-      pool.with_connection { |c| c.ping }
+      pool.with_connection(&.ping)
 
       stats = pool.stats
       stats[:available].should eq 2

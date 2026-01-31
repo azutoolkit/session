@@ -16,7 +16,7 @@ module Session
       @redis_host : String = "localhost",
       @redis_port : Int32 = 6379,
       @redis_database : Int32 = 0,
-      @redis_password : String? = nil
+      @redis_password : String? = nil,
     )
     end
   end

@@ -18,9 +18,8 @@ describe Session::CookieStore do
       store[session.session_id] = session
 
       # The cookie value should be encrypted, not plain JSON
-      cookie = store.cookies[store.data_key]?
-      cookie.should_not be_nil
-      cookie.not_nil!.value.should_not contain("session_id")
+      cookie = store.cookies[store.data_key]
+      cookie.value.should_not contain("session_id")
     end
   end
 

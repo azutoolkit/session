@@ -17,7 +17,7 @@ module Session
       @local_cache_enabled : Bool = true,
       @local_cache_ttl : Time::Span = 30.seconds,
       @local_cache_max_size : Int32 = 10_000,
-      @subscribe_timeout : Time::Span = 5.seconds
+      @subscribe_timeout : Time::Span = 5.seconds,
     )
     end
   end
