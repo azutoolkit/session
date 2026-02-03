@@ -26,9 +26,10 @@ module Session
     getter redis_store : RedisStore(T)
     getter coordinator : ClusterCoordinator(T)
     getter circuit_breaker : CircuitBreaker?
-    property current_session : SessionId(T) = SessionId(T).new
+    property current_session : SessionId(T)
 
     def initialize(@client : Redis = Redis.new, config : ClusterConfig = ClusterConfig.new)
+      @current_session = SessionId(T).new
       @redis_store = RedisStore(T).new(@client)
       @coordinator = ClusterCoordinator(T).new(@client, config)
       @circuit_breaker = @redis_store.circuit_breaker

@@ -3,9 +3,10 @@ module Session
     include Enumerable(SessionId(T))
     include QueryableStore(T)
     getter sessions : Hash(String, SessionId(T))
-    property current_session : SessionId(T) = SessionId(T).new
+    property current_session : SessionId(T)
 
     def initialize(@sessions : Hash(String, SessionId(T)) = Hash(String, SessionId(T)).new)
+      @current_session = SessionId(T).new
     end
 
     def each(&block : SessionId(T) -> _)
