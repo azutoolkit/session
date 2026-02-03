@@ -26,7 +26,7 @@ module Session
     getter redis_store : RedisStore(T)
     getter coordinator : ClusterCoordinator(T)
     getter circuit_breaker : CircuitBreaker?
-    property current_session : SessionId(T)
+    @current_session : SessionId(T)?
 
     def initialize(@client : Redis = Redis.new, config : ClusterConfig = ClusterConfig.new)
       @current_session = SessionId(T).new
@@ -37,6 +37,14 @@ module Session
       if config.enabled
         @coordinator.start
       end
+    end
+
+    def current_session : SessionId(T)
+      @current_session.as(SessionId(T))
+    end
+
+    def current_session=(value : SessionId(T)) : SessionId(T)
+      @current_session = value
     end
 
     def storage : String

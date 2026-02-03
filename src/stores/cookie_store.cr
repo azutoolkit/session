@@ -3,12 +3,20 @@ require "../store"
 module Session
   class CookieStore(T) < Store(T)
     include Enumerable(HTTP::Cookie)
-    property current_session : SessionId(T)
+    @current_session : SessionId(T)?
 
     property cookies
 
     def initialize(@cookies : HTTP::Cookies = HTTP::Cookies.new)
       @current_session = SessionId(T).new
+    end
+
+    def current_session : SessionId(T)
+      @current_session.as(SessionId(T))
+    end
+
+    def current_session=(value : SessionId(T)) : SessionId(T)
+      @current_session = value
     end
 
     def each(&block : HTTP::Cookie -> _)
