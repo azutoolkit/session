@@ -199,7 +199,7 @@ module Session
       0_i64
     end
 
-    def clear
+    def clear : Nil
       with_circuit_breaker do
         Retry.with_retry_if(
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
@@ -216,7 +216,6 @@ module Session
       # Don't raise on clear failures
     rescue ex : Exception
       Log.warn { "Unexpected error while clearing sessions: #{ex.message}" }
-      nil
     end
 
     # Health check method for monitoring
