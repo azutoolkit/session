@@ -107,6 +107,25 @@ module Session
     property log_errors : Bool = true
     property fail_fast_on_corruption : Bool = true
 
+    # Load configuration from a preset
+    # Available presets: :development, :production, :high_security, :testing, :clustered
+    def self.from_preset(preset : Symbol) : Configuration
+      case preset
+      when :development
+        Presets.development
+      when :production
+        Presets.production
+      when :high_security
+        Presets.high_security
+      when :testing
+        Presets.testing
+      when :clustered
+        Presets.clustered
+      else
+        raise ArgumentError.new("Unknown preset: #{preset}. Available: :development, :production, :high_security, :testing, :clustered")
+      end
+    end
+
     def session
       provider || raise "Session provider not configured"
     end

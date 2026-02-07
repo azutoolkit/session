@@ -1,4 +1,5 @@
 require "redis"
+require "../store"
 
 module Session
   class RedisStore(T) < Store(T)
@@ -6,10 +7,39 @@ module Session
     getter circuit_breaker : CircuitBreaker?
     property current_session : SessionId(T) = SessionId(T).new
 
-    def initialize(@client : Redis = Redis.new)
+    @client : Redis?
+    @pool : ConnectionPool?
+
+    # Initialize with either a Redis client or a ConnectionPool
+    # When using a pool, pass it as the pool parameter
+    # When using a direct client, pass it as the client parameter
+    def initialize(client : Redis? = nil, pool : ConnectionPool? = nil)
+      if pool
+        @pool = pool
+        @client = nil
+      elsif client
+        @client = client
+        @pool = nil
+      else
+        # Default: create a new Redis client
+        @client = Redis.new
+        @pool = nil
+      end
+
       if Session.config.circuit_breaker_enabled
         @circuit_breaker = CircuitBreaker.new(Session.config.circuit_breaker_config)
       end
+    end
+
+    # Convenience factory method for connection pool
+    def self.with_pool(pool : ConnectionPool) : self
+      new(pool: pool)
+    end
+
+    # Convenience factory method for pool config
+    def self.with_pool(config : ConnectionPoolConfig) : self
+      pool = ConnectionPool.new(config)
+      new(pool: pool)
     end
 
     def storage : String
@@ -22,7 +52,8 @@ module Session
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
           Session.config.retry_config
         ) do
-          if data = @client.get(prefixed(key))
+          with_redis_connection do |client|
+            if data = client.get(prefixed(key))
             begin
               json_data = decrypt_if_enabled(data)
               SessionId(T).from_json(json_data)
@@ -36,8 +67,9 @@ module Session
               Log.error { "Failed to deserialize session data for key #{key}: #{ex.message}" }
               raise SessionSerializationException.new("Session deserialization failed", ex)
             end
-          else
-            raise SessionNotFoundException.new("Session not found: #{key}")
+            else
+              raise SessionNotFoundException.new("Session not found: #{key}")
+            end
           end
         end
       end
@@ -60,7 +92,8 @@ module Session
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
           Session.config.retry_config
         ) do
-          if data = @client.get(prefixed(key))
+          with_redis_connection do |client|
+            if data = client.get(prefixed(key))
             begin
               json_data = decrypt_if_enabled(data)
               SessionId(T).from_json(json_data)
@@ -73,6 +106,7 @@ module Session
             rescue ex : Exception
               Log.warn { "Failed to deserialize session data for key #{key}: #{ex.message}" }
               nil
+            end
             end
           end
         end
@@ -94,20 +128,22 @@ module Session
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
           Session.config.retry_config
         ) do
-          begin
-            session_json = session.to_json
-            data_to_store = encrypt_if_enabled(session_json)
-            @client.setex(prefixed(key), timeout.total_seconds.to_i, data_to_store)
-            session
-          rescue ex : Session::SessionEncryptionException
-            Log.error { "Failed to encrypt session data for key #{key}: #{ex.message}" }
-            raise ex
-          rescue ex : JSON::ParseException
-            Log.error { "Failed to serialize session data for key #{key}: #{ex.message}" }
-            raise SessionSerializationException.new("Session serialization failed", ex)
-          rescue ex : Exception
-            Log.error { "Failed to store session data for key #{key}: #{ex.message}" }
-            raise SessionValidationException.new("Session storage failed", ex)
+          with_redis_connection do |client|
+            begin
+              session_json = session.to_json
+              data_to_store = encrypt_if_enabled(session_json)
+              client.setex(prefixed(key), timeout.total_seconds.to_i, data_to_store)
+              session
+            rescue ex : Session::SessionEncryptionException
+              Log.error { "Failed to encrypt session data for key #{key}: #{ex.message}" }
+              raise ex
+            rescue ex : JSON::ParseException
+              Log.error { "Failed to serialize session data for key #{key}: #{ex.message}" }
+              raise SessionSerializationException.new("Session serialization failed", ex)
+            rescue ex : Exception
+              Log.error { "Failed to store session data for key #{key}: #{ex.message}" }
+              raise SessionValidationException.new("Session storage failed", ex)
+            end
           end
         end
       end
@@ -130,7 +166,7 @@ module Session
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
           Session.config.retry_config
         ) do
-          @client.del(prefixed(key))
+          with_redis_connection { |client| client.del(prefixed(key)) }
         end
       end
     rescue ex : CircuitOpenException
@@ -149,7 +185,7 @@ module Session
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
           Session.config.retry_config
         ) do
-          RedisUtils.count_keys(@client, prefixed("*"))
+          with_redis_connection { |client| RedisUtils.count_keys(client, prefixed("*")) }
         end
       end
     rescue ex : CircuitOpenException
@@ -169,7 +205,7 @@ module Session
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
           Session.config.retry_config
         ) do
-          RedisUtils.delete_keys(@client, prefixed("*"))
+          with_redis_connection { |client| RedisUtils.delete_keys(client, prefixed("*")) }
         end
       end
     rescue ex : CircuitOpenException
@@ -184,7 +220,7 @@ module Session
 
     # Health check method for monitoring
     def healthy? : Bool
-      @client.ping
+      with_redis_connection { |client| client.ping }
       true
     rescue ex : Exception
       Log.warn { "Redis health check failed: #{ex.message}" }
@@ -193,7 +229,11 @@ module Session
 
     # Graceful shutdown
     def shutdown
-      @client.close
+      if pool = @pool
+        pool.shutdown
+      elsif client = @client
+        client.close
+      end
     rescue ex : Exception
       Log.warn { "Error during Redis shutdown: #{ex.message}" }
     end
@@ -202,10 +242,12 @@ module Session
 
     def each_session(&block : SessionId(T) -> Nil) : Nil
       with_circuit_breaker do
-        RedisUtils.scan_keys(@client, prefixed("*")) do |key_str|
-          session_key = key_str.sub("session:", "")
-          if session = self[session_key]?
-            yield session
+        with_redis_connection do |client|
+          RedisUtils.scan_keys(client, prefixed("*")) do |key_str|
+            session_key = key_str.sub("session:", "")
+            if session = self[session_key]?
+              yield session
+            end
           end
         end
       end
@@ -220,44 +262,48 @@ module Session
       keys_to_delete = [] of String
 
       with_circuit_breaker do
-        RedisUtils.scan_keys(@client, prefixed("*")) do |key_str|
-          session_key = key_str.sub("session:", "")
-          if session = self[session_key]?
-            if predicate.call(session)
-              keys_to_delete << key_str
+        with_redis_connection do |client|
+          RedisUtils.scan_keys(client, prefixed("*")) do |key_str|
+            session_key = key_str.sub("session:", "")
+            if session = self[session_key]?
+              if predicate.call(session)
+                keys_to_delete << key_str
 
-              # Delete in batches
-              if keys_to_delete.size >= 100
-                @client.del(keys_to_delete)
-                count += keys_to_delete.size.to_i64
-                keys_to_delete.clear
+                # Delete in batches
+                if keys_to_delete.size >= 100
+                  client.del(keys_to_delete)
+                  count += keys_to_delete.size.to_i64
+                  keys_to_delete.clear
+                end
               end
             end
           end
-        end
 
-        # Delete remaining keys
-        unless keys_to_delete.empty?
-          @client.del(keys_to_delete)
-          count += keys_to_delete.size.to_i64
+          # Delete remaining keys
+          unless keys_to_delete.empty?
+            client.del(keys_to_delete)
+            count += keys_to_delete.size.to_i64
+          end
         end
       end
 
       count
     rescue ex : CircuitOpenException | Redis::ConnectionError | Redis::CommandTimeoutError
       Log.warn { "Error while bulk deleting sessions: #{ex.message}" }
-      count
+      count.as(Int64)
     rescue ex : Exception
       Log.warn { "Unexpected error while bulk deleting sessions: #{ex.message}" }
-      count
+      count.as(Int64)
     end
 
     def all_session_ids : Array(String)
       ids = [] of String
 
       with_circuit_breaker do
-        RedisUtils.scan_keys(@client, prefixed("*")) do |key_str|
-          ids << key_str.sub("session:", "")
+        with_redis_connection do |client|
+          RedisUtils.scan_keys(client, prefixed("*")) do |key_str|
+            ids << key_str.sub("session:", "")
+          end
         end
       end
 
@@ -280,6 +326,17 @@ module Session
         cb.call { yield }
       else
         yield
+      end
+    end
+
+    # Execute a block with a Redis connection (either direct or from pool)
+    private def with_redis_connection(&block : Redis -> T) : T forall T
+      if pool = @pool
+        pool.with_connection { |conn| yield conn }
+      elsif client = @client
+        yield client
+      else
+        raise "RedisStore not properly initialized: no client or pool available"
       end
     end
 
@@ -313,6 +370,31 @@ module Session
 
       # Then decompress if needed
       Compression.decompress_if_needed(processed)
+    end
+  end
+
+  # Backward-compatible wrapper for RedisStore with connection pooling
+  #
+  # DEPRECATED: Use RedisStore.with_pool(pool) or RedisStore.new(pool: pool) instead
+  # This class is maintained for backward compatibility and will be removed in a future version
+  #
+  # Example migration:
+  #   # Old way
+  #   store = PooledRedisStore(UserSession).new(pool_config)
+  #
+  #   # New way
+  #   store = RedisStore(UserSession).with_pool(pool_config)
+  #   # or
+  #   pool = ConnectionPool.new(pool_config)
+  #   store = RedisStore(UserSession).new(pool: pool)
+  class PooledRedisStore(T) < RedisStore(T)
+    def initialize(pool : ConnectionPool)
+      super(pool: pool)
+    end
+
+    def self.new(config : ConnectionPoolConfig = ConnectionPoolConfig.new)
+      pool = ConnectionPool.new(config)
+      new(pool)
     end
   end
 end
