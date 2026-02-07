@@ -30,7 +30,9 @@ module Session
     end
   end
 
-  # Local cache with TTL and LRU eviction for session data
+  # Local cache with TTL and LRU eviction
+  # Generic parameter T can be any type - when used for sessions, instantiate as LocalCache(SessionId(T))
+  # where T is your session data type that includes SessionData
   class LocalCache(T)
     struct CacheEntry(T)
       property value : T
@@ -199,6 +201,10 @@ module Session
   end
 
   # Main cluster coordinator for managing pub/sub and local caching
+  #
+  # Generic Constraint:
+  #   T must include SessionData - represents the session data type
+  #   Internally manages LocalCache(SessionId(T)) for caching complete session objects
   class ClusterCoordinator(T)
     getter local_cache : LocalCache(SessionId(T))
     getter node_id : String

@@ -4,21 +4,12 @@ module Session
   class RedisStore(T) < Store(T)
     include QueryableStore(T)
     getter circuit_breaker : CircuitBreaker?
-    @current_session : SessionId(T)?
+    property current_session : SessionId(T) = SessionId(T).new
 
     def initialize(@client : Redis = Redis.new)
-      @current_session = SessionId(T).new
       if Session.config.circuit_breaker_enabled
         @circuit_breaker = CircuitBreaker.new(Session.config.circuit_breaker_config)
       end
-    end
-
-    def current_session : SessionId(T)
-      @current_session.as(SessionId(T))
-    end
-
-    def current_session=(value : SessionId(T)) : SessionId(T)
-      @current_session = value
     end
 
     def storage : String

@@ -1,4 +1,9 @@
 module Session
+  # Abstract base class for session storage backends
+  #
+  # Generic Constraint:
+  #   T must include the SessionData module for proper serialization and validation
+  #   T must provide a parameterless constructor (T.new)
   abstract class Store(T)
     include Provider
 
@@ -15,6 +20,10 @@ module Session
   end
 
   # Module for stores that support querying sessions
+  #
+  # Generic Constraint:
+  #   T must include SessionData module
+  #   This module should only be included by Store(T) subclasses
   module QueryableStore(T)
     # Iterate over all sessions matching a predicate
     abstract def each_session(&block : SessionId(T) -> Nil) : Nil

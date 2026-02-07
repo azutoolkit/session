@@ -1,6 +1,10 @@
 module Session
+  # Provider module for session lifecycle management
+  # Included by Store(T) to provide session operations
+  # The including class must define generic type parameter T where T : SessionData
   module Provider
     abstract def storage : String
+    # Current session - type is determined by the generic parameter T of the including Store(T)
     abstract def current_session
 
     macro included

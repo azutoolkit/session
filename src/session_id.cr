@@ -1,4 +1,9 @@
 module Session
+  # Container for session data with automatic expiration tracking
+  #
+  # Generic Constraint:
+  #   T must include the SessionData module
+  #   T must provide a parameterless constructor (T.new is called during initialization)
   class SessionId(T)
     include JSON::Serializable
 
