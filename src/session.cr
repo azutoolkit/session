@@ -13,6 +13,7 @@ require "./binding"
 require "./configuration"
 require "./session_id"
 require "./retry"
+require "./redis_utils"
 require "./connection_pool"
 require "./cluster"
 require "./stores/*"
@@ -101,16 +102,6 @@ module Session
     def initialize(message : String = "Cluster subscription failed", cause : Exception? = nil)
       super(message, cause)
     end
-  end
-
-  # Legacy exceptions for backward compatibility
-  class NotImplementedException < Exception
-  end
-
-  class InvalidSessionExeception < Exception
-  end
-
-  class InvalidSessionEventException < Exception
   end
 
   CONFIG = Configuration.new

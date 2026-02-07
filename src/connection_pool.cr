@@ -219,20 +219,9 @@ module Session
     end
 
     def size : Int64
-      count = 0_i64
       @pool.with_connection do |client|
-        cursor = "0"
-        pattern = prefixed("*")
-
-        loop do
-          result = client.scan(cursor, match: pattern, count: 100)
-          cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::RedisValue))
-          count += keys.size.to_i64
-          break if cursor == "0"
-        end
+        RedisUtils.count_keys(client, prefixed("*"))
       end
-      count
     rescue ex : Exception
       Log.warn { "Error getting session count: #{ex.message}" }
       0_i64
@@ -240,21 +229,7 @@ module Session
 
     def clear
       @pool.with_connection do |client|
-        cursor = "0"
-        pattern = prefixed("*")
-
-        loop do
-          result = client.scan(cursor, match: pattern, count: 100)
-          cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::RedisValue))
-
-          unless keys.empty?
-            string_keys = keys.map(&.as(String))
-            client.del(string_keys)
-          end
-
-          break if cursor == "0"
-        end
+        RedisUtils.delete_keys(client, prefixed("*"))
       end
     rescue ex : Exception
       Log.warn { "Error clearing sessions: #{ex.message}" }
@@ -271,23 +246,11 @@ module Session
     # QueryableStore implementation
     def each_session(&block : SessionId(T) -> Nil) : Nil
       @pool.with_connection do |client|
-        cursor = "0"
-        pattern = prefixed("*")
-
-        loop do
-          result = client.scan(cursor, match: pattern, count: 100)
-          cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::RedisValue))
-
-          keys.each do |key|
-            key_str = key.as(String)
-            session_key = key_str.sub("session:", "")
-            if session = self[session_key]?
-              yield session
-            end
+        RedisUtils.scan_keys(client, prefixed("*")) do |key_str|
+          session_key = key_str.sub("session:", "")
+          if session = self[session_key]?
+            yield session
           end
-
-          break if cursor == "0"
         end
       end
     rescue ex : Exception
@@ -296,34 +259,30 @@ module Session
 
     def bulk_delete(&predicate : SessionId(T) -> Bool) : Int64
       count = 0_i64
+      keys_to_delete = [] of String
 
       begin
         @pool.with_connection do |client|
-          cursor = "0"
-          pattern = prefixed("*")
+          RedisUtils.scan_keys(client, prefixed("*")) do |key_str|
+            session_key = key_str.sub("session:", "")
+            if session = self[session_key]?
+              if predicate.call(session)
+                keys_to_delete << key_str
 
-          loop do
-            result = client.scan(cursor, match: pattern, count: 100)
-            cursor = result[0].as(String)
-            keys = result[1].as(Array(Redis::RedisValue))
-            keys_to_delete = [] of String
-
-            keys.each do |key|
-              key_str = key.as(String)
-              session_key = key_str.sub("session:", "")
-              if session = self[session_key]?
-                if predicate.call(session)
-                  keys_to_delete << key_str
+                # Delete in batches
+                if keys_to_delete.size >= 100
+                  client.del(keys_to_delete)
+                  count += keys_to_delete.size.to_i64
+                  keys_to_delete.clear
                 end
               end
             end
+          end
 
-            unless keys_to_delete.empty?
-              client.del(keys_to_delete)
-              count += keys_to_delete.size.to_i64
-            end
-
-            break if cursor == "0"
+          # Delete remaining keys
+          unless keys_to_delete.empty?
+            client.del(keys_to_delete)
+            count += keys_to_delete.size.to_i64
           end
         end
       rescue ex : Exception
@@ -337,20 +296,8 @@ module Session
       ids = [] of String
 
       @pool.with_connection do |client|
-        cursor = "0"
-        pattern = prefixed("*")
-
-        loop do
-          result = client.scan(cursor, match: pattern, count: 100)
-          cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::RedisValue))
-
-          keys.each do |key|
-            key_str = key.as(String)
-            ids << key_str.sub("session:", "")
-          end
-
-          break if cursor == "0"
+        RedisUtils.scan_keys(client, prefixed("*")) do |key_str|
+          ids << key_str.sub("session:", "")
         end
       end
 
