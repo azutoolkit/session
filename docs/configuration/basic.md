@@ -11,6 +11,58 @@ Session.configure do |config|
 end
 ```
 
+## Configuration Presets (Recommended)
+
+Session provides presets for common scenarios, reducing configuration from 14+ lines to just 3-4 lines:
+
+### Development Preset
+
+```crystal
+Session.configure do |config|
+  config = Configuration.from_preset(:development)
+  config.provider = Session::MemoryStore(UserSession).provider
+end
+```
+
+### Production Preset
+
+```crystal
+Session.configure do |config|
+  config = Configuration.from_preset(:production)
+  config.secret = ENV.fetch("SESSION_SECRET")
+  config.provider = Session::RedisStore(UserSession).new(client: Redis.new)
+end
+```
+
+### Available Presets
+
+| Preset | Use Case | Key Features |
+|--------|----------|--------------|
+| `:development` | Local development | 30min timeout, no encryption, minimal security |
+| `:production` | Production deployments | 1hr timeout, encryption, circuit breaker, retry |
+| `:high_security` | Sensitive applications | 15min timeout, KDF, client binding, max security |
+| `:testing` | Test suites | 5min timeout, fast, no logging |
+| `:clustered` | Multi-node deployments | Production settings + clustering + local cache |
+
+### Customizing Presets
+
+Start with a preset and override specific settings:
+
+```crystal
+Session.configure do |config|
+  config = Configuration.from_preset(:production)
+
+  # Override specific settings
+  config.timeout = 8.hours
+  config.bind_to_user_agent = true
+
+  config.secret = ENV.fetch("SESSION_SECRET")
+  config.provider = Session::RedisStore(UserSession).new
+end
+```
+
+See [Phase 2: Developer Experience](../architecture/phase-2-developer-experience.md) for complete preset documentation.
+
 ## Full Configuration
 
 ```crystal

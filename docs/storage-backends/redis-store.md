@@ -12,13 +12,41 @@ flowchart LR
 
 ## Usage
 
+### Direct Client
+
 ```crystal
 Session.configure do |config|
-  config.provider = Session::RedisStore(UserSession).provider(
+  config.provider = Session::RedisStore(UserSession).new(
     client: Redis.new(host: "localhost", port: 6379)
   )
 end
 ```
+
+### Connection Pool (Recommended for Production)
+
+RedisStore now supports connection pooling for better resource management:
+
+```crystal
+Session.configure do |config|
+  # Using factory method
+  pool_config = Session::ConnectionPoolConfig.new(
+    size: 20,
+    timeout: 2.seconds
+  )
+  config.provider = Session::RedisStore(UserSession).with_pool(pool_config)
+end
+```
+
+Or with an existing pool:
+
+```crystal
+pool = Session::ConnectionPool.new(config)
+config.provider = Session::RedisStore(UserSession).new(pool: pool)
+```
+
+**Note:** `PooledRedisStore` is deprecated. Use `RedisStore.with_pool()` instead.
+
+See [Phase 3: Store Consolidation](../architecture/phase-3-store-consolidation.md) for migration details.
 
 ## Characteristics
 

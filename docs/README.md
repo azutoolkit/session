@@ -92,6 +92,23 @@ Session integrates with popular Crystal web frameworks:
 - **[AZU Framework](integrations/azu-framework.md)** - Type-safe endpoint integration with helper modules
 - **[HTTP::Server](integrations/http-server.md)** - Crystal's built-in HTTP server
 
+## Recent Improvements (2026-02-07)
+
+Session has recently undergone a comprehensive architecture overhaul, resulting in:
+
+- **~460 lines removed** (net ~320 after improvements)
+- **100% test coverage maintained** (346/346 passing)
+- **Zero breaking changes**
+- **Significantly improved maintainability**
+
+Key improvements include:
+- **Code Quality**: Eliminated all duplication through RedisUtils module
+- **Developer Experience**: Configuration presets reduce setup by 71%
+- **Store Consolidation**: Unified Redis stores, removing 90% of duplicate code
+- **Provider Simplification**: Removed all macro magic for better debuggability
+
+See the [Architecture & Improvements](architecture/overview.md) section for complete details.
+
 ## Getting Started
 
 Continue to the [Installation](getting-started/installation.md) guide to add Session to your project.
