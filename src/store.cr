@@ -7,17 +7,17 @@ module Session
   #
   # Example usage:
   #   ```
-  #   struct UserSession
-  #     include Session::SessionData
-  #     property user_id : Int64?
-  #     property? authenticated : Bool = false
-  #   end
+  # struct UserSession
+  #   include Session::SessionData
+  #   property user_id : Int64?
+  #   property? authenticated : Bool = false
+  # end
   #
-  #   # Use memory store for development
-  #   store = Session::MemoryStore(UserSession).new
+  # # Use memory store for development
+  # store = Session::MemoryStore(UserSession).new
   #
-  #   # Use Redis for production
-  #   store = Session::RedisStore(UserSession).new(Redis.new)
+  # # Use Redis for production
+  # store = Session::RedisStore(UserSession).new(Redis.new)
   #   ```
   abstract class Store(T)
     include Provider # Marker module for backward compatibility
@@ -28,7 +28,7 @@ module Session
     # Current session must be provided by subclasses
     # Typically implemented as: property current_session : SessionId(T) = SessionId(T).new
     abstract def current_session : SessionId(T)
-    abstract def current_session=(value : SessionId(T))
+    abstract def current_session=(current_session : SessionId(T))
 
     # Core store operations
     abstract def [](key : String) : SessionId(T)

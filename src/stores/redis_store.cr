@@ -54,19 +54,19 @@ module Session
         ) do
           with_redis_connection do |client|
             if data = client.get(prefixed(key))
-            begin
-              json_data = decrypt_if_enabled(data)
-              SessionId(T).from_json(json_data)
-            rescue ex : Session::SessionEncryptionException
-              Log.error { "Failed to decrypt session data for key #{key}: #{ex.message}" }
-              raise SessionCorruptionException.new("Session decryption failed", ex)
-            rescue ex : JSON::ParseException
-              Log.error { "Failed to parse session data for key #{key}: #{ex.message}" }
-              raise SessionCorruptionException.new("Invalid JSON in session data", ex)
-            rescue ex : Exception
-              Log.error { "Failed to deserialize session data for key #{key}: #{ex.message}" }
-              raise SessionSerializationException.new("Session deserialization failed", ex)
-            end
+              begin
+                json_data = decrypt_if_enabled(data)
+                SessionId(T).from_json(json_data)
+              rescue ex : Session::SessionEncryptionException
+                Log.error { "Failed to decrypt session data for key #{key}: #{ex.message}" }
+                raise SessionCorruptionException.new("Session decryption failed", ex)
+              rescue ex : JSON::ParseException
+                Log.error { "Failed to parse session data for key #{key}: #{ex.message}" }
+                raise SessionCorruptionException.new("Invalid JSON in session data", ex)
+              rescue ex : Exception
+                Log.error { "Failed to deserialize session data for key #{key}: #{ex.message}" }
+                raise SessionSerializationException.new("Session deserialization failed", ex)
+              end
             else
               raise SessionNotFoundException.new("Session not found: #{key}")
             end
@@ -94,19 +94,19 @@ module Session
         ) do
           with_redis_connection do |client|
             if data = client.get(prefixed(key))
-            begin
-              json_data = decrypt_if_enabled(data)
-              SessionId(T).from_json(json_data)
-            rescue ex : Session::SessionEncryptionException
-              Log.warn { "Failed to decrypt session data for key #{key}: #{ex.message}" }
-              nil
-            rescue ex : JSON::ParseException
-              Log.warn { "Failed to parse session data for key #{key}: #{ex.message}" }
-              nil
-            rescue ex : Exception
-              Log.warn { "Failed to deserialize session data for key #{key}: #{ex.message}" }
-              nil
-            end
+              begin
+                json_data = decrypt_if_enabled(data)
+                SessionId(T).from_json(json_data)
+              rescue ex : Session::SessionEncryptionException
+                Log.warn { "Failed to decrypt session data for key #{key}: #{ex.message}" }
+                nil
+              rescue ex : JSON::ParseException
+                Log.warn { "Failed to parse session data for key #{key}: #{ex.message}" }
+                nil
+              rescue ex : Exception
+                Log.warn { "Failed to deserialize session data for key #{key}: #{ex.message}" }
+                nil
+              end
             end
           end
         end
@@ -166,7 +166,7 @@ module Session
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
           Session.config.retry_config
         ) do
-          with_redis_connection { |client| client.del(prefixed(key)) }
+          with_redis_connection(&.del(prefixed(key)))
         end
       end
     rescue ex : CircuitOpenException
@@ -216,11 +216,12 @@ module Session
       # Don't raise on clear failures
     rescue ex : Exception
       Log.warn { "Unexpected error while clearing sessions: #{ex.message}" }
+      nil
     end
 
     # Health check method for monitoring
     def healthy? : Bool
-      with_redis_connection { |client| client.ping }
+      with_redis_connection(&.ping)
       true
     rescue ex : Exception
       Log.warn { "Redis health check failed: #{ex.message}" }

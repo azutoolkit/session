@@ -127,5 +127,4 @@ module Session
       )
     end
   end
-
 end

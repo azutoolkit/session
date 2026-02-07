@@ -107,9 +107,39 @@ module Session
     property log_errors : Bool = true
     property fail_fast_on_corruption : Bool = true
 
-    # Load configuration from a preset
+    # Load configuration from a preset (returns a new Configuration instance)
     # Available presets: :development, :production, :high_security, :testing, :clustered
     def self.from_preset(preset : Symbol) : Configuration
+      resolve_preset(preset)
+    end
+
+    # Apply a preset's settings to this configuration instance
+    # Available presets: :development, :production, :high_security, :testing, :clustered
+    def apply_preset(preset : Symbol) : self
+      source = Configuration.resolve_preset(preset)
+      self.timeout = source.timeout
+      self.require_secure_secret = source.require_secure_secret
+      self.encrypt_redis_data = source.encrypt_redis_data
+      self.sliding_expiration = source.sliding_expiration
+      self.log_errors = source.log_errors
+      self.circuit_breaker_enabled = source.circuit_breaker_enabled
+      self.circuit_breaker_config = source.circuit_breaker_config
+      self.enable_retry = source.enable_retry
+      self.retry_config = source.retry_config
+      self.compress_data = source.compress_data
+      self.compression_threshold = source.compression_threshold
+      self.bind_to_ip = source.bind_to_ip
+      self.bind_to_user_agent = source.bind_to_user_agent
+      self.use_kdf = source.use_kdf
+      self.kdf_iterations = source.kdf_iterations
+      self.digest_algorithm = source.digest_algorithm
+      self.digest_fallback = source.digest_fallback
+      self.fail_fast_on_corruption = source.fail_fast_on_corruption
+      self.cluster = source.cluster
+      self
+    end
+
+    protected def self.resolve_preset(preset : Symbol) : Configuration
       case preset
       when :development
         Presets.development

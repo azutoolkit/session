@@ -6,7 +6,7 @@ require "../src/session"
 # Development environment - minimal security, verbose logging
 Session.configure do |config|
   # Load development preset
-  config = Configuration.from_preset(:development)
+  config.apply_preset(:development)
 
   # Override specific settings
   config.secret = ENV["SESSION_SECRET"]? || Configuration::DEFAULT_SECRET
@@ -19,7 +19,7 @@ end
 # Production environment - balanced security and performance
 Session.configure do |config|
   # Load production preset
-  config = Configuration.from_preset(:production)
+  config.apply_preset(:production)
 
   # Override with environment-specific values
   config.secret = ENV["SESSION_SECRET"]
@@ -36,7 +36,7 @@ end
 # High security environment - maximum security
 Session.configure do |config|
   # Load high security preset
-  config = Configuration.from_preset(:high_security)
+  config.apply_preset(:high_security)
 
   # Must provide secure secret
   config.secret = ENV.fetch("SESSION_SECRET")
@@ -54,7 +54,7 @@ end
 # Testing environment - fast and simple
 Session.configure do |config|
   # Load testing preset
-  config = Configuration.from_preset(:testing)
+  config.apply_preset(:testing)
 
   # Use memory store for tests
   config.provider = Session::MemoryStore(UserSession).provider
@@ -63,7 +63,7 @@ end
 # Clustered environment - multi-node deployment
 Session.configure do |config|
   # Load clustered preset (based on production)
-  config = Configuration.from_preset(:clustered)
+  config.apply_preset(:clustered)
 
   # Configure cluster settings
   config.cluster.node_id = ENV["NODE_ID"]? || UUID.random.to_s
@@ -120,11 +120,11 @@ end
 
 Session.configure do |config|
   # Start with production preset
-  config = Configuration.from_preset(:production)
+  config.apply_preset(:production)
 
   # Override only what you need
-  config.timeout = 8.hours # Longer session for this app
-  config.bind_to_user_agent = true # Add user agent binding
+  config.timeout = 8.hours            # Longer session for this app
+  config.bind_to_user_agent = true    # Add user agent binding
   config.compression_threshold = 1024 # Larger threshold
 
   config.secret = ENV.fetch("SESSION_SECRET")
@@ -139,25 +139,21 @@ Session.configure do |config|
 
   case environment
   when "development"
-    config = Configuration.from_preset(:development)
+    config.apply_preset(:development)
     config.provider = Session::MemoryStore(UserSession).provider
-
   when "test"
-    config = Configuration.from_preset(:testing)
+    config.apply_preset(:testing)
     config.provider = Session::MemoryStore(UserSession).provider
-
   when "staging"
-    config = Configuration.from_preset(:production)
+    config.apply_preset(:production)
     config.secret = ENV.fetch("SESSION_SECRET")
     redis = Redis.new(host: ENV["REDIS_HOST"]?)
     config.provider = Session::RedisStore(UserSession).provider(client: redis)
-
   when "production"
-    config = Configuration.from_preset(:high_security)
+    config.apply_preset(:high_security)
     config.secret = ENV.fetch("SESSION_SECRET")
     pool_config = Session::ConnectionPoolConfig.new(size: 20)
     config.provider = Session::PooledRedisStore(UserSession).new(pool_config)
-
   else
     raise "Unknown environment: #{environment}"
   end
