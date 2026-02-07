@@ -53,8 +53,6 @@ end
 
 # Example: Handling session operations with error handling
 class SessionManager
-  @session : Session::Provider
-
   def initialize(@session = Session.session)
   end
 

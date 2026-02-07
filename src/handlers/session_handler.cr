@@ -1,8 +1,8 @@
 module Session
-  class SessionHandler
+  class SessionHandler(T)
     include HTTP::Handler
 
-    def initialize(@session : Session::Provider)
+    def initialize(@session : Store(T))
     end
 
     def call(context : HTTP::Server::Context)

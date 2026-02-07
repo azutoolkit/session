@@ -23,8 +23,16 @@ class UserSession
   property username : String? = "example"
 end
 
+# Crystal 1.19+ needs a concrete type for @provider since the library
+# declares `property provider = nil` (no type annotation).
+# Provide the type so specs compile.
+class Session::Configuration
+  @provider : Session::MemoryStore(UserSession)? = nil
+end
+
 # Reset configuration to defaults before each test
 def reset_config
+  Session.config.provider = Session::MemoryStore(UserSession).new
   Session.config.timeout = 1.hour
   Session.config.secret = Session::Configuration::DEFAULT_SECRET
   Session.config.require_secure_secret = false

@@ -1,8 +1,8 @@
 module Session
-  class AuthenticationHandler
+  class AuthenticationHandler(T)
     include HTTP::Handler
 
-    def initialize(@session : Session::Provider, @signin_path : String, @whitelist : Regex)
+    def initialize(@session : Store(T), @signin_path : String, @whitelist : Regex)
     end
 
     def call(context : HTTP::Server::Context)

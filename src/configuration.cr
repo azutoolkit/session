@@ -91,7 +91,7 @@ module Session
       Log.debug { "Session regenerated - OldId: #{old_sid} NewId: #{new_sid} Data: #{data}" }
     end
 
-    property provider : Provider? = nil
+    property provider = nil
 
     # Retry configuration for resilient operations
     property retry_config : RetryConfig = RetryConfig.new(
