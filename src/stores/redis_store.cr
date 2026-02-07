@@ -199,7 +199,7 @@ module Session
       0_i64
     end
 
-    def clear : Nil
+    def clear
       with_circuit_breaker do
         Retry.with_retry_if(
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
@@ -210,10 +210,13 @@ module Session
       end
     rescue ex : CircuitOpenException
       Log.warn { "Circuit breaker open while clearing sessions: #{ex.message}" }
+      # Don't raise on clear failures
     rescue ex : Redis::ConnectionError | Redis::CommandTimeoutError
       Log.warn { "Redis connection error while clearing sessions: #{ex.message}" }
+      # Don't raise on clear failures
     rescue ex : Exception
       Log.warn { "Unexpected error while clearing sessions: #{ex.message}" }
+      nil
     end
 
     # Health check method for monitoring
