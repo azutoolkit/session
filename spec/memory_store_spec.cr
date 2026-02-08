@@ -1,7 +1,7 @@
 require "./spec_helper"
 
 describe Session::MemoryStore do
-  session = Session::SessionId(UserSession).new
+  session = UserSession.new
   memory_store = Session::MemoryStore(UserSession).new
   key = session.session_id
 
@@ -28,7 +28,7 @@ describe Session::MemoryStore do
     memory_store[key] = session
     memory_store.size.should eq 1
 
-    expired = Session::SessionId(UserSession).new
+    expired = UserSession.new
     memory_store[key] = expired
     memory_store.size.should eq 1
   end

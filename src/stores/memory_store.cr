@@ -1,14 +1,14 @@
 module Session
   class MemoryStore(T) < Store(T)
-    include Enumerable(SessionId(T))
+    include Enumerable(T)
     include QueryableStore(T)
-    getter sessions : Hash(String, SessionId(T))
-    property current_session : SessionId(T) = SessionId(T).new
+    getter sessions : Hash(String, T)
+    property current_session : T = T.new
 
-    def initialize(@sessions : Hash(String, SessionId(T)) = Hash(String, SessionId(T)).new)
+    def initialize(@sessions : Hash(String, T) = Hash(String, T).new)
     end
 
-    def each(&block : SessionId(T) -> _)
+    def each(&block : T -> _)
       sessions.each_value do |session|
         yield session if session.valid?
       end
@@ -18,7 +18,7 @@ module Session
       self.class.name
     end
 
-    def [](key : String) : SessionId(T)
+    def [](key : String) : T
       if session = sessions[key]?
         if session.valid?
           session
@@ -37,7 +37,7 @@ module Session
       raise SessionValidationException.new("Session retrieval failed", ex)
     end
 
-    def []?(key : String) : SessionId(T)?
+    def []?(key : String) : T?
       if session = sessions[key]?
         if session.valid?
           session
@@ -52,7 +52,7 @@ module Session
       nil
     end
 
-    def []=(key : String, session : SessionId(T)) : SessionId(T)
+    def []=(key : String, session : T) : T
       # Validate session before storing
       unless session.valid?
         raise SessionValidationException.new("Cannot store expired session: #{key}")
@@ -111,7 +111,7 @@ module Session
 
     # QueryableStore implementation
 
-    def each_session(&block : SessionId(T) -> Nil) : Nil
+    def each_session(&block : T -> Nil) : Nil
       sessions.each_value do |session|
         yield session if session.valid?
       end
@@ -119,7 +119,7 @@ module Session
       Log.warn { "Error while iterating sessions: #{ex.message}" }
     end
 
-    def bulk_delete(&predicate : SessionId(T) -> Bool) : Int64
+    def bulk_delete(&predicate : T -> Bool) : Int64
       count = 0_i64
       keys_to_delete = [] of String
 

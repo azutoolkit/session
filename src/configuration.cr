@@ -75,23 +75,23 @@ module Session
 
     # Track if secret warning has been logged to avoid spamming
     @secret_warning_logged : Bool = false
-    property on_started : Proc(String, Session::SessionData, Nil) = ->(sid : String, data : Session::SessionData) do
+    property on_started : Proc(String, Session::Base, Nil) = ->(sid : String, data : Session::Base) do
       Log.debug { "Session started - SessionId: #{sid} Data: #{data}" }
     end
-    property on_deleted : Proc(String, Session::SessionData, Nil) = ->(sid : String, data : Session::SessionData) do
+    property on_deleted : Proc(String, Session::Base, Nil) = ->(sid : String, data : Session::Base) do
       Log.debug { "Session deleted - SessionId: #{sid} Data: #{data}" }
     end
-    property on_loaded : Proc(String, Session::SessionData, Nil) = ->(sid : String, data : Session::SessionData) do
+    property on_loaded : Proc(String, Session::Base, Nil) = ->(sid : String, data : Session::Base) do
       Log.debug { "Session loaded - SessionId: #{sid} Data: #{data}" }
     end
-    property on_client : Proc(String, Session::SessionData, Nil) = ->(sid : String, data : Session::SessionData) do
+    property on_client : Proc(String, Session::Base, Nil) = ->(sid : String, data : Session::Base) do
       Log.debug { "Session accessed - SessionId: #{sid} Data: #{data}" }
     end
-    property on_regenerated : Proc(String, String, Session::SessionData, Nil) = ->(old_sid : String, new_sid : String, data : Session::SessionData) do
+    property on_regenerated : Proc(String, String, Session::Base, Nil) = ->(old_sid : String, new_sid : String, data : Session::Base) do
       Log.debug { "Session regenerated - OldId: #{old_sid} NewId: #{new_sid} Data: #{data}" }
     end
 
-    property provider = nil
+    property store = nil
 
     # Retry configuration for resilient operations
     property retry_config : RetryConfig = RetryConfig.new(
@@ -157,7 +157,7 @@ module Session
     end
 
     def session
-      provider || raise "Session provider not configured"
+      store || raise "Session store not configured"
     end
 
     def encryptor

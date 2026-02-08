@@ -1,7 +1,7 @@
 require "./spec_helper"
 
 describe "MemoryStore Error Handling" do
-  session = Session::SessionId(UserSession).new
+  session = UserSession.new
   memory_store = Session::MemoryStore(UserSession).new
   key = session.session_id
 
@@ -21,7 +21,7 @@ describe "MemoryStore Error Handling" do
     it "raises SessionExpiredException for expired sessions" do
       # Create and store a valid session first
       Session.config.timeout = 1.hour
-      test_session = Session::SessionId(UserSession).new
+      test_session = UserSession.new
       test_key = test_session.session_id
       memory_store[test_key] = test_session
 
@@ -31,7 +31,7 @@ describe "MemoryStore Error Handling" do
 
       # Create session, store directly bypassing validation
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       expired_key = expired_session.session_id
       memory_store.sessions[expired_key] = expired_session
 
@@ -50,7 +50,7 @@ describe "MemoryStore Error Handling" do
     it "returns nil for expired sessions with []?" do
       # Create session and store directly to bypass validation
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       expired_key = expired_session.session_id
       memory_store.sessions[expired_key] = expired_session
 
@@ -63,7 +63,7 @@ describe "MemoryStore Error Handling" do
     it "automatically cleans up expired sessions on retrieval" do
       # Create session and store directly to bypass validation
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       expired_key = expired_session.session_id
       memory_store.sessions[expired_key] = expired_session
 
@@ -84,7 +84,7 @@ describe "MemoryStore Error Handling" do
     it "raises SessionValidationException for expired sessions" do
       # Create an expired session
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       expired_key = expired_session.session_id
 
       expect_raises(Session::SessionValidationException) do
@@ -106,13 +106,13 @@ describe "MemoryStore Error Handling" do
     it "only counts valid sessions" do
       # Add a valid session
       Session.config.timeout = 1.hour
-      valid_session = Session::SessionId(UserSession).new
+      valid_session = UserSession.new
       memory_store[valid_session.session_id] = valid_session
       memory_store.size.should eq(1)
 
       # Add an expired session directly to internal storage
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       memory_store.sessions[expired_session.session_id] = expired_session
 
       # Size should still only count valid sessions
@@ -129,12 +129,12 @@ describe "MemoryStore Error Handling" do
     it "cleans up expired sessions" do
       # Store a valid session
       Session.config.timeout = 1.hour
-      valid_session = Session::SessionId(UserSession).new
+      valid_session = UserSession.new
       memory_store[valid_session.session_id] = valid_session
 
       # Add an expired session directly
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       memory_store.sessions[expired_session.session_id] = expired_session
 
       # Reset timeout before cleanup
@@ -160,12 +160,12 @@ describe "MemoryStore Error Handling" do
       Session.config.timeout = 1.hour
 
       # Add a valid session
-      valid_session = Session::SessionId(UserSession).new
+      valid_session = UserSession.new
       memory_store[valid_session.session_id] = valid_session
 
       # Add an expired session directly
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       memory_store.sessions[expired_session.session_id] = expired_session
 
       # Reset timeout before checking stats

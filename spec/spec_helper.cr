@@ -17,22 +17,21 @@ def redis_client
   Redis.new(host: REDIS_HOST)
 end
 
-class UserSession
-  include Session::SessionData
+class UserSession < Session::Base
   property? authenticated : Bool = true
   property username : String? = "example"
 end
 
-# Crystal 1.19+ needs a concrete type for @provider since the library
-# declares `property provider = nil` (no type annotation).
+# Crystal 1.19+ needs a concrete type for @store since the library
+# declares `property store = nil` (no type annotation).
 # Provide the type so specs compile.
 class Session::Configuration
-  @provider : Session::MemoryStore(UserSession)? = nil
+  @store : Session::MemoryStore(UserSession)? = nil
 end
 
 # Reset configuration to defaults before each test
 def reset_config
-  Session.config.provider = Session::MemoryStore(UserSession).new
+  Session.config.store = Session::MemoryStore(UserSession).new
   Session.config.timeout = 1.hour
   Session.config.secret = Session::Configuration::DEFAULT_SECRET
   Session.config.require_secure_secret = false

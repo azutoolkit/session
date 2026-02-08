@@ -3,7 +3,7 @@ require "./spec_helper"
 if REDIS_AVAILABLE
   describe "RedisStore Error Handling" do
     client = redis_client
-    session = Session::SessionId(UserSession).new
+    session = UserSession.new
     redis_store = Session::RedisStore(UserSession).new(client)
     key = session.session_id
 

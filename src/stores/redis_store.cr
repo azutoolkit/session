@@ -5,7 +5,7 @@ module Session
   class RedisStore(T) < Store(T)
     include QueryableStore(T)
     getter circuit_breaker : CircuitBreaker?
-    property current_session : SessionId(T) = SessionId(T).new
+    property current_session : T = T.new
 
     @client : Redis?
     @pool : ConnectionPool?
@@ -46,7 +46,7 @@ module Session
       self.class.name
     end
 
-    def [](key : String) : SessionId(T)
+    def [](key : String) : T
       with_circuit_breaker do
         Retry.with_retry_if(
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
@@ -56,7 +56,7 @@ module Session
             if data = client.get(prefixed(key))
               begin
                 json_data = decrypt_if_enabled(data)
-                SessionId(T).from_json(json_data)
+                T.from_json(json_data)
               rescue ex : Session::SessionEncryptionException
                 Log.error { "Failed to decrypt session data for key #{key}: #{ex.message}" }
                 raise SessionCorruptionException.new("Session decryption failed", ex)
@@ -86,7 +86,7 @@ module Session
       raise SessionValidationException.new("Session retrieval failed", ex)
     end
 
-    def []?(key : String) : SessionId(T)?
+    def []?(key : String) : T?
       with_circuit_breaker do
         Retry.with_retry_if(
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
@@ -96,7 +96,7 @@ module Session
             if data = client.get(prefixed(key))
               begin
                 json_data = decrypt_if_enabled(data)
-                SessionId(T).from_json(json_data)
+                T.from_json(json_data)
               rescue ex : Session::SessionEncryptionException
                 Log.warn { "Failed to decrypt session data for key #{key}: #{ex.message}" }
                 nil
@@ -122,7 +122,7 @@ module Session
       nil
     end
 
-    def []=(key : String, session : SessionId(T)) : SessionId(T)
+    def []=(key : String, session : T) : T
       with_circuit_breaker do
         Retry.with_retry_if(
           ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
@@ -240,7 +240,7 @@ module Session
 
     # QueryableStore implementation
 
-    def each_session(&block : SessionId(T) -> Nil) : Nil
+    def each_session(&block : T -> Nil) : Nil
       with_circuit_breaker do
         with_redis_connection do |client|
           RedisUtils.scan_keys(client, prefixed("*")) do |key_str|
@@ -257,7 +257,7 @@ module Session
       Log.warn { "Unexpected error while iterating sessions: #{ex.message}" }
     end
 
-    def bulk_delete(&predicate : SessionId(T) -> Bool) : Int64
+    def bulk_delete(&predicate : T -> Bool) : Int64
       count = 0_i64
       keys_to_delete = [] of String
 

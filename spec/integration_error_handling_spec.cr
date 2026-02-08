@@ -11,13 +11,13 @@ class IntegrationOkHandler
 end
 
 # Helper method for creating test contexts
-private def create_test_context_with_session(session_provider, session_id : String) : HTTP::Server::Context
+private def create_test_context_with_session(session_store, session_id : String) : HTTP::Server::Context
   request = HTTP::Request.new("GET", "/")
   response = HTTP::Server::Response.new(IO::Memory.new)
   context = HTTP::Server::Context.new(request, response)
 
   context.request.cookies << HTTP::Cookie.new(
-    name: session_provider.session_key,
+    name: session_store.session_key,
     value: session_id,
     expires: 1.hour.from_now,
     secure: true,
@@ -38,28 +38,28 @@ describe "Integration Error Handling & Resilience" do
       end
 
       # Test with memory store
-      memory_provider = Session::MemoryStore(UserSession).provider
-      memory_handler = Session::SessionHandler.new(memory_provider)
+      memory_store = Session::MemoryStore(UserSession).new
+      memory_handler = Session::SessionHandler.new(memory_store)
       memory_handler.next = IntegrationOkHandler.new
 
       # Create a session
-      session = memory_provider.create
-      session.data.username = "test_user"
+      session = memory_store.create
+      session.username = "test_user"
 
       # Simulate request with session
-      context = create_test_context_with_session(memory_provider, session.session_id)
+      context = create_test_context_with_session(memory_store, session.session_id)
       memory_handler.call(context)
 
       # Verify session was handled correctly
       context.response.status_code.should eq(200)
-      context.response.cookies[memory_provider.session_key]?.should_not be_nil
+      context.response.cookies[memory_store.session_key]?.should_not be_nil
     end
 
     it "handles session expiration across the system" do
       # Create an expired session
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
-      expired_session.data.username = "expired_user"
+      expired_session = UserSession.new
+      expired_session.username = "expired_user"
 
       # Test with memory store
       memory_store = Session::MemoryStore(UserSession).new
@@ -124,7 +124,7 @@ describe "Integration Error Handling & Resilience" do
     it "handles partial system failures gracefully" do
       # Test that the system can handle partial failures
       memory_store = Session::MemoryStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       key = session.session_id
 
       # Store session
@@ -132,7 +132,7 @@ describe "Integration Error Handling & Resilience" do
 
       # Simulate partial failure by corrupting the session
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       expired_key = expired_session.session_id
 
       # Should handle expired session gracefully - returns nil
@@ -191,7 +191,7 @@ describe "Integration Error Handling & Resilience" do
   describe "Health Monitoring" do
     it "tracks session statistics accurately with memory store" do
       memory_store = Session::MemoryStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       key = session.session_id
 
       # Add a valid session
@@ -358,7 +358,7 @@ if REDIS_AVAILABLE
 
       it "continues working when Redis is available" do
         redis_store = Session::RedisStore(UserSession).new(client)
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         key = session.session_id
 
         # Should work normally when Redis is available

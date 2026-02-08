@@ -13,7 +13,7 @@ Session.configure do |config|
   config.timeout = 2.hours
 
   # Set your store
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).provider
 end
 
 # Production environment - balanced security and performance
@@ -30,7 +30,7 @@ Session.configure do |config|
     host: ENV["REDIS_HOST"]? || "localhost",
     port: ENV["REDIS_PORT"]?.try(&.to_i) || 6379
   )
-  config.provider = Session::RedisStore(UserSession).provider(client: redis)
+  config.store = Session::RedisStore(UserSession).provider(client: redis)
 end
 
 # High security environment - maximum security

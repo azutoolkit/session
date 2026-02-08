@@ -17,10 +17,10 @@ private def create_test_context : HTTP::Server::Context
   HTTP::Server::Context.new(request, response)
 end
 
-private def create_test_context_with_session(session_provider, session_id : String) : HTTP::Server::Context
+private def create_test_context_with_session(session_store, session_id : String) : HTTP::Server::Context
   context = create_test_context
   context.request.cookies << HTTP::Cookie.new(
-    name: session_provider.session_key,
+    name: session_store.session_key,
     value: session_id,
     expires: 1.hour.from_now,
     secure: true,
@@ -30,10 +30,10 @@ private def create_test_context_with_session(session_provider, session_id : Stri
   context
 end
 
-private def create_test_context_with_corrupted_session(session_provider) : HTTP::Server::Context
+private def create_test_context_with_corrupted_session(session_store) : HTTP::Server::Context
   context = create_test_context
   context.request.cookies << HTTP::Cookie.new(
-    name: session_provider.session_key,
+    name: session_store.session_key,
     value: "corrupted_session_data",
     expires: 1.hour.from_now,
     secure: true,
@@ -43,10 +43,10 @@ private def create_test_context_with_corrupted_session(session_provider) : HTTP:
   context
 end
 
-private def create_test_context_with_invalid_session(session_provider) : HTTP::Server::Context
+private def create_test_context_with_invalid_session(session_store) : HTTP::Server::Context
   context = create_test_context
   context.request.cookies << HTTP::Cookie.new(
-    name: session_provider.session_key,
+    name: session_store.session_key,
     value: "invalid_session_id",
     expires: 1.hour.from_now,
     secure: true,
@@ -63,11 +63,11 @@ private def create_handler_chain(session_handler)
 end
 
 describe "SessionHandler Error Handling" do
-  session_provider = Session::MemoryStore(UserSession).provider
-  session_handler = create_handler_chain(Session::SessionHandler.new(session_provider))
+  session_store = Session::MemoryStore(UserSession).new
+  session_handler = create_handler_chain(Session::SessionHandler.new(session_store))
 
   before_each do
-    session_provider.delete
+    session_store.delete
     Session.config.timeout = 1.hour
   end
 
@@ -83,14 +83,14 @@ describe "SessionHandler Error Handling" do
     it "handles expired sessions gracefully" do
       # Create a valid session first
       Session.config.timeout = 1.hour
-      valid_session = session_provider.create
-      valid_session.data.username = "test_user"
+      valid_session = session_store.create
+      valid_session.username = "test_user"
       session_id = valid_session.session_id
 
       # Now access with a session that doesn't exist anymore (simulating expiration)
-      session_provider.delete
+      session_store.delete
 
-      context = create_test_context_with_session(session_provider, session_id)
+      context = create_test_context_with_session(session_store, session_id)
 
       # Should handle expired/missing session gracefully
       session_handler.call(context)
@@ -99,7 +99,7 @@ describe "SessionHandler Error Handling" do
 
     it "handles corrupted session data gracefully" do
       # Create a context with corrupted session data
-      context = create_test_context_with_corrupted_session(session_provider)
+      context = create_test_context_with_corrupted_session(session_store)
 
       # Should handle corrupted session gracefully
       session_handler.call(context)
@@ -116,7 +116,7 @@ describe "SessionHandler Error Handling" do
 
     it "handles session validation errors gracefully" do
       # Create an invalid session
-      context = create_test_context_with_invalid_session(session_provider)
+      context = create_test_context_with_invalid_session(session_store)
 
       # Should handle validation errors gracefully
       session_handler.call(context)
@@ -127,10 +127,10 @@ describe "SessionHandler Error Handling" do
   describe "Cookie Setting with Error Handling" do
     it "handles encryption errors gracefully" do
       # Create a valid session
-      session = session_provider.create
-      session.data.username = "test_user"
+      session = session_store.create
+      session.username = "test_user"
 
-      context = create_test_context_with_session(session_provider, session.session_id)
+      context = create_test_context_with_session(session_store, session.session_id)
 
       # Should handle encryption errors gracefully
       session_handler.call(context)
@@ -139,10 +139,10 @@ describe "SessionHandler Error Handling" do
 
     it "handles validation errors gracefully" do
       # Create a session that would fail validation
-      session = session_provider.create
-      session.data.username = "test_user"
+      session = session_store.create
+      session.username = "test_user"
 
-      context = create_test_context_with_session(session_provider, session.session_id)
+      context = create_test_context_with_session(session_store, session.session_id)
 
       # Should handle validation errors gracefully
       session_handler.call(context)
@@ -161,7 +161,7 @@ describe "SessionHandler Error Handling" do
   describe "Corrupted Session Cleanup" do
     it "clears corrupted sessions" do
       # Create a context with corrupted session data
-      context = create_test_context_with_corrupted_session(session_provider)
+      context = create_test_context_with_corrupted_session(session_store)
 
       # Should clear corrupted session and continue
       session_handler.call(context)
@@ -170,20 +170,20 @@ describe "SessionHandler Error Handling" do
 
     it "creates new session after clearing corrupted one" do
       # Create a context with corrupted session data
-      context = create_test_context_with_corrupted_session(session_provider)
+      context = create_test_context_with_corrupted_session(session_store)
 
       # Should create new session after clearing corrupted one
       session_handler.call(context)
       context.response.status_code.should eq(200)
 
-      # Provider should have a valid session
-      session_provider.valid?.should be_true
+      # Store should have a valid session
+      session_store.valid?.should be_true
     end
 
     it "handles cleanup errors gracefully" do
       # This would require mocking to simulate cleanup errors
       # For now, we test the normal case
-      context = create_test_context_with_corrupted_session(session_provider)
+      context = create_test_context_with_corrupted_session(session_store)
       session_handler.call(context)
       context.response.status_code.should eq(200)
     end
@@ -192,7 +192,7 @@ describe "SessionHandler Error Handling" do
   describe "Request Processing Continuity" do
     it "continues processing when session loading fails" do
       # Create a context that would cause session loading to fail
-      context = create_test_context_with_corrupted_session(session_provider)
+      context = create_test_context_with_corrupted_session(session_store)
 
       # Add a flag to track if processing continues
       context.response.headers.add("X-Processing-Continued", "true")
@@ -207,10 +207,10 @@ describe "SessionHandler Error Handling" do
 
     it "continues processing when cookie setting fails" do
       # Create a valid session
-      session = session_provider.create
-      session.data.username = "test_user"
+      session = session_store.create
+      session.username = "test_user"
 
-      context = create_test_context_with_session(session_provider, session.session_id)
+      context = create_test_context_with_session(session_store, session.session_id)
 
       # Add a flag to track if processing continues
       context.response.headers.add("X-Processing-Continued", "true")
@@ -228,13 +228,13 @@ describe "SessionHandler Error Handling" do
     it "logs session expiration appropriately" do
       # Create a valid session then delete it
       Session.config.timeout = 1.hour
-      session = session_provider.create
-      session.data.username = "expired_user"
+      session = session_store.create
+      session.username = "expired_user"
       session_id = session.session_id
 
-      session_provider.delete
+      session_store.delete
 
-      context = create_test_context_with_session(session_provider, session_id)
+      context = create_test_context_with_session(session_store, session_id)
 
       # Should log session expiration
       session_handler.call(context)
@@ -243,7 +243,7 @@ describe "SessionHandler Error Handling" do
 
     it "logs session corruption appropriately" do
       # Create a context with corrupted session data
-      context = create_test_context_with_corrupted_session(session_provider)
+      context = create_test_context_with_corrupted_session(session_store)
 
       # Should log session corruption
       session_handler.call(context)
@@ -260,7 +260,7 @@ describe "SessionHandler Error Handling" do
 
     it "logs validation errors appropriately" do
       # Create a context with invalid session data
-      context = create_test_context_with_invalid_session(session_provider)
+      context = create_test_context_with_invalid_session(session_store)
 
       # Should log validation errors
       session_handler.call(context)
@@ -270,8 +270,8 @@ describe "SessionHandler Error Handling" do
 
   describe "Integration with Different Storage Types" do
     it "works with memory store" do
-      memory_provider = Session::MemoryStore(UserSession).provider
-      memory_handler = create_handler_chain(Session::SessionHandler.new(memory_provider))
+      memory_store = Session::MemoryStore(UserSession).new
+      memory_handler = create_handler_chain(Session::SessionHandler.new(memory_store))
 
       context = create_test_context
       memory_handler.call(context)
@@ -279,8 +279,8 @@ describe "SessionHandler Error Handling" do
     end
 
     it "works with cookie store" do
-      cookie_provider = Session::CookieStore(UserSession).provider
-      cookie_handler = create_handler_chain(Session::SessionHandler.new(cookie_provider))
+      cookie_store = Session::CookieStore(UserSession).new
+      cookie_handler = create_handler_chain(Session::SessionHandler.new(cookie_store))
 
       context = create_test_context
       cookie_handler.call(context)
@@ -293,9 +293,9 @@ end
 if REDIS_AVAILABLE
   describe "SessionHandler Redis Integration" do
     it "works with Redis store" do
-      redis_provider = Session::RedisStore(UserSession).provider(client: redis_client)
+      redis_store = Session::RedisStore(UserSession).new(client: redis_client)
       ok_handler = OkHandler.new
-      redis_handler = Session::SessionHandler.new(redis_provider)
+      redis_handler = Session::SessionHandler.new(redis_store)
       redis_handler.next = ok_handler
 
       request = HTTP::Request.new("GET", "/")

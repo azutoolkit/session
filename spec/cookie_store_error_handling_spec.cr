@@ -1,7 +1,7 @@
 require "./spec_helper"
 
 describe "CookieStore Error Handling" do
-  session = Session::SessionId(UserSession).new
+  session = UserSession.new
   cookie_store = Session::CookieStore(UserSession).new
   key = session.session_id
 
@@ -70,7 +70,7 @@ describe "CookieStore Error Handling" do
     it "raises SessionValidationException for expired sessions" do
       # Create an expired session
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       expired_key = expired_session.session_id
 
       expect_raises(Session::SessionValidationException, "Cannot store expired session") do
@@ -153,7 +153,7 @@ describe "CookieStore Error Handling" do
     it "raises SessionValidationException for expired sessions in cookie creation" do
       # Create an expired session
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
 
       expect_raises(Session::SessionValidationException, "Cannot create cookie for expired session") do
         cookie_store.create_data_cookie(expired_session, "localhost")
@@ -293,7 +293,7 @@ describe "CookieStore Error Handling" do
     it "logs validation errors appropriately" do
       # Create an expired session
       Session.config.timeout = -1.hour
-      expired_session = Session::SessionId(UserSession).new
+      expired_session = UserSession.new
       expired_key = expired_session.session_id
 
       expect_raises(Session::SessionValidationException) do

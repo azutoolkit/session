@@ -2,15 +2,14 @@ module Session
   # Abstract base class for session storage backends
   #
   # Generic Constraint:
-  #   T must include the SessionData module for proper serialization and validation
+  #   T must inherit from Session::Base
   #   T must provide a parameterless constructor (T.new)
   #
   # Example usage:
   #   ```
-  # struct UserSession
-  #   include Session::SessionData
-  #   property user_id : Int64?
+  # class UserSession < Session::Base
   #   property? authenticated : Bool = false
+  #   property user_id : Int64? = nil
   # end
   #
   # # Use memory store for development
@@ -20,20 +19,18 @@ module Session
   # store = Session::RedisStore(UserSession).new(Redis.new)
   #   ```
   abstract class Store(T)
-    include Provider # Marker module for backward compatibility
-
     # Storage abstraction - must be implemented by subclasses
     abstract def storage : String
 
     # Current session must be provided by subclasses
-    # Typically implemented as: property current_session : SessionId(T) = SessionId(T).new
-    abstract def current_session : SessionId(T)
-    abstract def current_session=(current_session : SessionId(T))
+    # Typically implemented as: property current_session : T = T.new
+    abstract def current_session : T
+    abstract def current_session=(current_session : T)
 
     # Core store operations
-    abstract def [](key : String) : SessionId(T)
-    abstract def []?(key : String) : SessionId(T)?
-    abstract def []=(key : String, session : SessionId(T)) : SessionId(T)
+    abstract def [](key : String) : T
+    abstract def []?(key : String) : T?
+    abstract def []=(key : String, session : T) : T
     abstract def delete(key : String)
     abstract def size : Int64
     abstract def clear
@@ -55,10 +52,6 @@ module Session
       current_session.valid?
     end
 
-    def data
-      current_session.data
-    end
-
     def timeout
       Session.config.timeout
     end
@@ -70,41 +63,39 @@ module Session
     # Delete current session and create a new one
     def delete
       delete(session_id)
-      on(:deleted, session_id, data)
-      self.current_session = SessionId(T).new
+      on(:deleted, session_id, current_session)
+      self.current_session = T.new
     end
 
     # Regenerate session ID while preserving session data
     # Important for security after authentication state changes
-    def regenerate_id : SessionId(T)
+    def regenerate_id : T
       old_session_id = session_id
-      old_data = current_session.data
 
       # Delete the old session
       delete(old_session_id)
 
-      # Create a new session with the same data
-      self.current_session = SessionId(T).new
-      current_session.data = old_data
+      # Regenerate identity in-place (preserves all user data)
+      current_session.reset_identity!
 
-      # Store the new session
+      # Store the session with new ID
       self[session_id] = current_session
 
       # Trigger regeneration callback
-      Session.config.on_regenerated.call(old_session_id, session_id, current_session.data)
+      Session.config.on_regenerated.call(old_session_id, session_id, current_session)
 
       current_session
     end
 
-    def create : SessionId(T)
-      self.current_session = SessionId(T).new
+    def create : T
+      self.current_session = T.new
       self[session_id] = current_session
       current_session
     ensure
-      on(:started, session_id, current_session.data)
+      on(:started, session_id, current_session)
     end
 
-    def load_from(request_cookies : HTTP::Cookies) : SessionId(T)?
+    def load_from(request_cookies : HTTP::Cookies) : T?
       # Rotate flash messages at the start of each request
       @flash.rotate!
 
@@ -121,7 +112,7 @@ module Session
             current_session.touch
           end
 
-          on(:loaded, session_id, data)
+          on(:loaded, session_id, current_session)
         end
       end
     end
@@ -133,15 +124,15 @@ module Session
       end
     ensure
       self[session_id] = current_session
-      on(:client, session_id, data)
+      on(:client, session_id, current_session)
     end
 
-    def on(event : Symbol, session_id : String, data : T)
+    def on(event : Symbol, session_id : String, session : T)
       case event
-      when :started then Session.config.on_started.call(session_id, data)
-      when :loaded  then Session.config.on_loaded.call(session_id, data)
-      when :client  then Session.config.on_client.call(session_id, data)
-      when :deleted then Session.config.on_deleted.call(session_id, data)
+      when :started then Session.config.on_started.call(session_id, session)
+      when :loaded  then Session.config.on_loaded.call(session_id, session)
+      when :client  then Session.config.on_client.call(session_id, session)
+      when :deleted then Session.config.on_deleted.call(session_id, session)
       else
         raise "Unknown event: #{event}"
       end
@@ -160,26 +151,20 @@ module Session
         creation_time: Time.local
       )
     end
-
-    # Create a new store instance and return it as a provider
-    # This is a convenience method for configuration
-    def self.provider(**args) : Store(T)
-      new(**args)
-    end
   end
 
   # Module for stores that support querying sessions
   #
   # Generic Constraint:
-  #   T must include SessionData module
+  #   T must inherit from Session::Base
   #   This module should only be included by Store(T) subclasses
   module QueryableStore(T)
     # Iterate over all sessions matching a predicate
-    abstract def each_session(&block : SessionId(T) -> Nil) : Nil
+    abstract def each_session(&block : T -> Nil) : Nil
 
     # Find sessions matching a predicate
-    def find_by(&predicate : SessionId(T) -> Bool) : Array(SessionId(T))
-      results = [] of SessionId(T)
+    def find_by(&predicate : T -> Bool) : Array(T)
+      results = [] of T
       each_session do |session|
         results << session if predicate.call(session)
       end
@@ -187,8 +172,8 @@ module Session
     end
 
     # Find first session matching a predicate
-    def find_first(&predicate : SessionId(T) -> Bool) : SessionId(T)?
-      result : SessionId(T)? = nil
+    def find_first(&predicate : T -> Bool) : T?
+      result : T? = nil
       each_session do |session|
         if predicate.call(session)
           result = session
@@ -199,7 +184,7 @@ module Session
     end
 
     # Count sessions matching a predicate
-    def count_by(&predicate : SessionId(T) -> Bool) : Int64
+    def count_by(&predicate : T -> Bool) : Int64
       count = 0_i64
       each_session do |session|
         count += 1 if predicate.call(session)
@@ -208,7 +193,7 @@ module Session
     end
 
     # Delete all sessions matching a predicate
-    abstract def bulk_delete(&predicate : SessionId(T) -> Bool) : Int64
+    abstract def bulk_delete(&predicate : T -> Bool) : Int64
 
     # Get all session IDs
     abstract def all_session_ids : Array(String)

@@ -4,7 +4,7 @@ describe Session::CookieStore do
   describe "#[]=" do
     it "stores session in cookies" do
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
 
       store[session.session_id] = session
 
@@ -13,7 +13,7 @@ describe Session::CookieStore do
 
     it "encrypts session data" do
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
 
       store[session.session_id] = session
 
@@ -26,7 +26,7 @@ describe Session::CookieStore do
   describe "#[]" do
     it "retrieves stored session" do
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       store[session.session_id] = session
 
       retrieved = store[session.session_id]
@@ -50,7 +50,7 @@ describe Session::CookieStore do
 
     it "returns session when found" do
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       store[session.session_id] = session
 
       store[session.session_id]?.should_not be_nil
@@ -60,7 +60,7 @@ describe Session::CookieStore do
   describe "#delete" do
     it "removes session from cookies" do
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       store[session.session_id] = session
 
       store.delete(session.session_id)
@@ -74,7 +74,7 @@ describe Session::CookieStore do
       store = Session::CookieStore(UserSession).new
       store.size.should eq 0
 
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       store[session.session_id] = session
 
       store.size.should eq 1
@@ -84,7 +84,7 @@ describe Session::CookieStore do
   describe "#clear" do
     it "removes all session cookies" do
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       store[session.session_id] = session
 
       store.clear
@@ -95,10 +95,10 @@ describe Session::CookieStore do
   describe "cookie size validation" do
     it "raises CookieSizeExceededException for oversized data" do
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
 
       # Create session with very large data
-      session.data.username = "x" * 10000
+      session.username = "x" * 10000
 
       expect_raises(Session::CookieSizeExceededException) do
         store[session.session_id] = session
@@ -107,8 +107,8 @@ describe Session::CookieStore do
 
     it "stores normal-sized sessions" do
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
-      session.data.username = "normal_user"
+      session = UserSession.new
+      session.username = "normal_user"
 
       store[session.session_id] = session
       store[session.session_id]?.should_not be_nil
@@ -125,13 +125,13 @@ describe Session::CookieStore do
       Session.config.compression_threshold = 100
 
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
-      session.data.username = "test_" * 50 # Create data above threshold
+      session = UserSession.new
+      session.username = "test_" * 50 # Create data above threshold
 
       store[session.session_id] = session
       retrieved = store[session.session_id]
 
-      retrieved.data.username.should eq session.data.username
+      retrieved.username.should eq session.username
 
       # Restore original values
       Session.config.compress_data = original_compress
@@ -142,7 +142,7 @@ describe Session::CookieStore do
   describe "#create_data_cookie" do
     it "creates cookie with correct attributes" do
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
 
       cookie = store.create_data_cookie(session, "example.com")
 
@@ -157,7 +157,7 @@ describe Session::CookieStore do
     it "raises for expired session" do
       Session.config.timeout = -1.hour
       store = Session::CookieStore(UserSession).new
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
 
       expect_raises(Session::SessionValidationException) do
         store.create_data_cookie(session)

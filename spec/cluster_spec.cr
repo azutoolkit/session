@@ -445,7 +445,7 @@ if REDIS_AVAILABLE
         sleep(50.milliseconds)
 
         # Add something to the cache
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         coordinator.local_cache.set(session.session_id, session)
 
         # Publish from the same node
@@ -468,7 +468,7 @@ if REDIS_AVAILABLE
         sleep(50.milliseconds)
 
         # Add something to the cache
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         coordinator.local_cache.set(session.session_id, session)
 
         # Simulate a message from a different node
@@ -497,7 +497,7 @@ if REDIS_AVAILABLE
 
         # Add multiple sessions to the cache
         3.times do |i|
-          session = Session::SessionId(UserSession).new
+          session = UserSession.new
           coordinator.local_cache.set("session-#{i}", session)
         end
 

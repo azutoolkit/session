@@ -15,7 +15,7 @@ module Session
   #   config.cluster.enabled = true
   #   config.cluster.node_id = ENV["NODE_ID"]? || UUID.random.to_s
   #
-  #   config.provider = Session::ClusteredRedisStore(UserSession).new(
+  #   config.store = Session::ClusteredRedisStore(UserSession).new(
   #     client: Redis.new(host: "redis.example.com")
   #   )
   # end
@@ -26,7 +26,7 @@ module Session
     getter redis_store : RedisStore(T)
     getter coordinator : ClusterCoordinator(T)
     getter circuit_breaker : CircuitBreaker?
-    property current_session : SessionId(T) = SessionId(T).new
+    property current_session : T = T.new
 
     def initialize(@client : Redis = Redis.new, config : ClusterConfig = ClusterConfig.new)
       @redis_store = RedisStore(T).new(@client)
@@ -42,7 +42,7 @@ module Session
       "#{self.class.name} (backed by #{@redis_store.storage})"
     end
 
-    def [](key : String) : SessionId(T)
+    def [](key : String) : T
       # Check local cache first
       if @coordinator.config.local_cache_enabled
         if cached = @coordinator.local_cache.get(key)
@@ -63,7 +63,7 @@ module Session
       session
     end
 
-    def []?(key : String) : SessionId(T)?
+    def []?(key : String) : T?
       # Check local cache first
       if @coordinator.config.local_cache_enabled
         if cached = @coordinator.local_cache.get(key)
@@ -83,7 +83,7 @@ module Session
       end
     end
 
-    def []=(key : String, session : SessionId(T)) : SessionId(T)
+    def []=(key : String, session : T) : T
       # Store in Redis
       @redis_store[key] = session
 
@@ -151,11 +151,11 @@ module Session
 
     # QueryableStore implementation - delegate to redis_store
 
-    def each_session(&block : SessionId(T) -> Nil) : Nil
+    def each_session(&block : T -> Nil) : Nil
       @redis_store.each_session(&block)
     end
 
-    def bulk_delete(&predicate : SessionId(T) -> Bool) : Int64
+    def bulk_delete(&predicate : T -> Bool) : Int64
       deleted_count = 0_i64
 
       # We need to track which sessions are deleted to broadcast invalidations

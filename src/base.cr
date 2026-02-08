@@ -1,22 +1,28 @@
 module Session
-  # Container for session data with automatic expiration tracking
+  # Abstract base class for session data
   #
-  # Generic Constraint:
-  #   T must include the SessionData module
-  #   T must provide a parameterless constructor (T.new is called during initialization)
-  class SessionId(T)
+  # Subclass this to define your session's data structure.
+  # The subclass must implement `authenticated?` and provide a parameterless constructor.
+  #
+  # Example:
+  #   ```
+  # class UserSession < Session::Base
+  #   property? authenticated : Bool = false
+  #   property username : String? = nil
+  # end
+  #   ```
+  abstract class Base
     include JSON::Serializable
 
-    forward_missing_to data
     getter session_id : String = UUID.random.to_s
     getter created_at : Time = Time.local
 
-    property data : T
     property expires_at : Time
+
+    abstract def authenticated? : Bool
 
     def initialize
       @expires_at = timeout
-      @data = T.new
     end
 
     def expired?
@@ -38,8 +44,15 @@ module Session
       remaining > Time::Span.zero ? remaining : Time::Span.zero
     end
 
-    def ==(other : SessionId(T))
+    def ==(other : Base)
       session_id == other.session_id
+    end
+
+    # Regenerate session identity in-place (new id, timestamps, expiry)
+    protected def reset_identity! : Nil
+      @session_id = UUID.random.to_s
+      @created_at = Time.local
+      @expires_at = timeout
     end
 
     private def timeout

@@ -2,7 +2,7 @@ require "./spec_helper"
 
 if REDIS_AVAILABLE
   describe Session::RedisStore do
-    session = Session::SessionId(UserSession).new
+    session = UserSession.new
     redis_store = Session::RedisStore(UserSession).new redis_client
     key = session.session_id
 
@@ -30,7 +30,7 @@ if REDIS_AVAILABLE
       redis_store[key] = session
       redis_store.size.should eq 1
 
-      expired = Session::SessionId(UserSession).new
+      expired = UserSession.new
       redis_store[key] = expired
       redis_store.size.should eq 1
     end

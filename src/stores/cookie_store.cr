@@ -3,7 +3,7 @@ require "../store"
 module Session
   class CookieStore(T) < Store(T)
     include Enumerable(HTTP::Cookie)
-    property current_session : SessionId(T) = SessionId(T).new
+    property current_session : T = T.new
     property cookies
 
     def initialize(@cookies : HTTP::Cookies = HTTP::Cookies.new)
@@ -19,12 +19,12 @@ module Session
       self.class.name
     end
 
-    def [](key : String) : SessionId(T)
+    def [](key : String) : T
       if data = cookies[data_key]?
         begin
           decrypted = String.new(verify_and_decrypt(data.value))
           payload = Compression.decompress_if_needed(decrypted)
-          SessionId(T).from_json payload
+          T.from_json payload
         rescue ex : Session::SessionEncryptionException
           Log.error { "Failed to decrypt session data: #{ex.message}" }
           raise SessionCorruptionException.new("Session data corruption detected", ex)
@@ -45,12 +45,12 @@ module Session
       raise SessionValidationException.new("Session retrieval failed", ex)
     end
 
-    def []?(key : String) : SessionId(T)?
+    def []?(key : String) : T?
       if data = cookies[data_key]?
         begin
           decrypted = String.new(verify_and_decrypt(data.value))
           payload = Compression.decompress_if_needed(decrypted)
-          SessionId(T).from_json payload
+          T.from_json payload
         rescue ex : Session::SessionEncryptionException
           Log.warn { "Failed to decrypt session data: #{ex.message}" }
           nil
@@ -67,7 +67,7 @@ module Session
       nil
     end
 
-    def []=(key : String, session : SessionId(T)) : SessionId(T)
+    def []=(key : String, session : T) : T
       # Validate session before storing
       unless session.valid?
         raise SessionValidationException.new("Cannot store expired session")
@@ -118,7 +118,7 @@ module Session
       Log.warn { "Error while clearing sessions: #{ex.message}" }
     end
 
-    def create_data_cookie(session : SessionId(T), host : String = "") : HTTP::Cookie
+    def create_data_cookie(session : T, host : String = "") : HTTP::Cookie
       # Validate session before creating cookie
       unless session.valid?
         raise SessionValidationException.new("Cannot create cookie for expired session")

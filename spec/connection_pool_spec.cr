@@ -115,7 +115,7 @@ if REDIS_AVAILABLE
       config = Session::ConnectionPoolConfig.new(size: 2, redis_host: REDIS_HOST)
       store = Session::PooledRedisStore(UserSession).new(config)
 
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       key = session.session_id
 
       (store[key] = session).should eq session
@@ -149,7 +149,7 @@ if REDIS_AVAILABLE
       config = Session::ConnectionPoolConfig.new(size: 2, redis_host: REDIS_HOST)
       store = Session::PooledRedisStore(UserSession).new(config)
 
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       key = session.session_id
 
       store[key] = session
@@ -166,7 +166,7 @@ if REDIS_AVAILABLE
       store.clear
       store.size.should eq 0
 
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       store[session.session_id] = session
       store.size.should eq 1
 
@@ -178,7 +178,7 @@ if REDIS_AVAILABLE
       config = Session::ConnectionPoolConfig.new(size: 2, redis_host: REDIS_HOST)
       store = Session::PooledRedisStore(UserSession).new(config)
 
-      session = Session::SessionId(UserSession).new
+      session = UserSession.new
       store[session.session_id] = session
       store.size.should be > 0
 
@@ -203,8 +203,8 @@ if REDIS_AVAILABLE
         store = Session::PooledRedisStore(UserSession).new(config)
         store.clear
 
-        s1 = Session::SessionId(UserSession).new
-        s2 = Session::SessionId(UserSession).new
+        s1 = UserSession.new
+        s2 = UserSession.new
         store[s1.session_id] = s1
         store[s2.session_id] = s2
 
@@ -221,7 +221,7 @@ if REDIS_AVAILABLE
         store = Session::PooledRedisStore(UserSession).new(config)
         store.clear
 
-        s1 = Session::SessionId(UserSession).new
+        s1 = UserSession.new
         store[s1.session_id] = s1
 
         ids = store.all_session_ids
@@ -236,15 +236,15 @@ if REDIS_AVAILABLE
         store = Session::PooledRedisStore(UserSession).new(config)
         store.clear
 
-        s1 = Session::SessionId(UserSession).new
-        s1.data.username = "delete_me"
-        s2 = Session::SessionId(UserSession).new
-        s2.data.username = "keep_me"
+        s1 = UserSession.new
+        s1.username = "delete_me"
+        s2 = UserSession.new
+        s2.username = "keep_me"
 
         store[s1.session_id] = s1
         store[s2.session_id] = s2
 
-        deleted = store.bulk_delete { |s| s.data.username == "delete_me" }
+        deleted = store.bulk_delete { |s| s.username == "delete_me" }
         deleted.should eq 1
         store[s1.session_id]?.should be_nil
         store[s2.session_id]?.should_not be_nil

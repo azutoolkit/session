@@ -31,8 +31,8 @@ module Session
   end
 
   # Local cache with TTL and LRU eviction
-  # Generic parameter T can be any type - when used for sessions, instantiate as LocalCache(SessionId(T))
-  # where T is your session data type that includes SessionData
+  # Generic parameter T can be any type - when used for sessions, instantiate as LocalCache(T)
+  # where T is your session class that inherits from Session::Base
   class LocalCache(T)
     struct CacheEntry(T)
       property value : T
@@ -203,10 +203,10 @@ module Session
   # Main cluster coordinator for managing pub/sub and local caching
   #
   # Generic Constraint:
-  #   T must include SessionData - represents the session data type
-  #   Internally manages LocalCache(SessionId(T)) for caching complete session objects
+  #   T must inherit from Session::Base - represents the session type
+  #   Internally manages LocalCache(T) for caching complete session objects
   class ClusterCoordinator(T)
-    getter local_cache : LocalCache(SessionId(T))
+    getter local_cache : LocalCache(T)
     getter node_id : String
     getter config : ClusterConfig
 
@@ -218,7 +218,7 @@ module Session
 
     def initialize(@redis : Redis, @config : ClusterConfig = ClusterConfig.new)
       @node_id = @config.node_id
-      @local_cache = LocalCache(SessionId(T)).new(
+      @local_cache = LocalCache(T).new(
         ttl: @config.local_cache_ttl,
         max_size: @config.local_cache_max_size
       )

@@ -19,12 +19,12 @@ describe Session::AuthenticationHandler do
 
   describe "#call" do
     it "passes through when session is authenticated" do
-      provider = Session::MemoryStore(UserSession).provider
-      session = provider.create
-      session.data.authenticated = true
+      store = Session::MemoryStore(UserSession).new
+      session = store.create
+      session.authenticated = true
 
       recorder = RecordingHandler.new
-      handler = Session::AuthenticationHandler.new(provider, signin_path, whitelist)
+      handler = Session::AuthenticationHandler.new(store, signin_path, whitelist)
       handler.next = recorder
 
       request = HTTP::Request.new("GET", "/dashboard")
@@ -38,12 +38,12 @@ describe Session::AuthenticationHandler do
     end
 
     it "redirects to signin when session is not authenticated" do
-      provider = Session::MemoryStore(UserSession).provider
-      session = provider.create
-      session.data.authenticated = false
+      store = Session::MemoryStore(UserSession).new
+      session = store.create
+      session.authenticated = false
 
       recorder = RecordingHandler.new
-      handler = Session::AuthenticationHandler.new(provider, signin_path, whitelist)
+      handler = Session::AuthenticationHandler.new(store, signin_path, whitelist)
       handler.next = recorder
 
       request = HTTP::Request.new("GET", "/dashboard")
@@ -58,11 +58,11 @@ describe Session::AuthenticationHandler do
     end
 
     it "includes redirect_to with the original resource path" do
-      provider = Session::MemoryStore(UserSession).provider
-      session = provider.create
-      session.data.authenticated = false
+      store = Session::MemoryStore(UserSession).new
+      session = store.create
+      session.authenticated = false
 
-      handler = Session::AuthenticationHandler.new(provider, signin_path, whitelist)
+      handler = Session::AuthenticationHandler.new(store, signin_path, whitelist)
       handler.next = RecordingHandler.new
 
       request = HTTP::Request.new("GET", "/admin/settings?tab=security")
@@ -76,12 +76,12 @@ describe Session::AuthenticationHandler do
     end
 
     it "passes through whitelisted paths even when not authenticated" do
-      provider = Session::MemoryStore(UserSession).provider
-      session = provider.create
-      session.data.authenticated = false
+      store = Session::MemoryStore(UserSession).new
+      session = store.create
+      session.authenticated = false
 
       recorder = RecordingHandler.new
-      handler = Session::AuthenticationHandler.new(provider, signin_path, whitelist)
+      handler = Session::AuthenticationHandler.new(store, signin_path, whitelist)
       handler.next = recorder
 
       request = HTTP::Request.new("GET", "/public/assets/style.css")
@@ -95,12 +95,12 @@ describe Session::AuthenticationHandler do
     end
 
     it "passes through health endpoint when not authenticated" do
-      provider = Session::MemoryStore(UserSession).provider
-      session = provider.create
-      session.data.authenticated = false
+      store = Session::MemoryStore(UserSession).new
+      session = store.create
+      session.authenticated = false
 
       recorder = RecordingHandler.new
-      handler = Session::AuthenticationHandler.new(provider, signin_path, whitelist)
+      handler = Session::AuthenticationHandler.new(store, signin_path, whitelist)
       handler.next = recorder
 
       request = HTTP::Request.new("GET", "/health")
@@ -115,15 +115,15 @@ describe Session::AuthenticationHandler do
   end
 
   describe "#current_session" do
-    it "delegates to the provider" do
-      provider = Session::MemoryStore(UserSession).provider
-      session = provider.create
-      session.data.username = "test_user"
+    it "delegates to the store" do
+      store = Session::MemoryStore(UserSession).new
+      session = store.create
+      session.username = "test_user"
 
-      handler = Session::AuthenticationHandler.new(provider, signin_path, whitelist)
+      handler = Session::AuthenticationHandler.new(store, signin_path, whitelist)
 
       handler.current_session.session_id.should eq(session.session_id)
-      handler.current_session.data.username.should eq("test_user")
+      handler.current_session.username.should eq("test_user")
     end
   end
 end

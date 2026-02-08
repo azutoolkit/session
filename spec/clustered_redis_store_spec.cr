@@ -52,14 +52,14 @@ if REDIS_AVAILABLE
         config = Session::ClusterConfig.new(enabled: false, local_cache_enabled: true)
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         key = session.session_id
 
         store[key] = session
         retrieved = store[key]
 
         retrieved.session_id.should eq session.session_id
-        retrieved.data.username.should eq session.data.username
+        retrieved.username.should eq session.username
 
         store.shutdown
         redis.close
@@ -70,7 +70,7 @@ if REDIS_AVAILABLE
         config = Session::ClusterConfig.new(enabled: false, local_cache_enabled: true)
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         key = session.session_id
 
         store[key] = session
@@ -95,7 +95,7 @@ if REDIS_AVAILABLE
         config = Session::ClusterConfig.new(enabled: false, local_cache_enabled: true)
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         key = session.session_id
 
         # Store in Redis directly (bypass cache)
@@ -122,7 +122,7 @@ if REDIS_AVAILABLE
         config = Session::ClusterConfig.new(enabled: false, local_cache_enabled: false)
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         key = session.session_id
 
         store[key] = session
@@ -157,7 +157,7 @@ if REDIS_AVAILABLE
         config = Session::ClusterConfig.new(enabled: false, local_cache_enabled: true)
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         key = session.session_id
 
         store[key] = session
@@ -176,7 +176,7 @@ if REDIS_AVAILABLE
         config = Session::ClusterConfig.new(enabled: false, local_cache_enabled: true)
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         key = session.session_id
 
         store[key] = session
@@ -199,7 +199,7 @@ if REDIS_AVAILABLE
         sleep(50.milliseconds) # Allow coordinator to start
 
         # Store session first (without subscriber listening)
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         store[session.session_id] = session
 
         sleep(50.milliseconds) # Allow any messages to clear
@@ -247,7 +247,7 @@ if REDIS_AVAILABLE
 
         # Add multiple sessions
         3.times do
-          session = Session::SessionId(UserSession).new
+          session = UserSession.new
           store[session.session_id] = session
         end
 
@@ -307,7 +307,7 @@ if REDIS_AVAILABLE
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
         5.times do
-          session = Session::SessionId(UserSession).new
+          session = UserSession.new
           store[session.session_id] = session
         end
 
@@ -337,7 +337,7 @@ if REDIS_AVAILABLE
         config = Session::ClusterConfig.new(enabled: false, local_cache_enabled: true)
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         store[session.session_id] = session
 
         # Hit
@@ -362,7 +362,7 @@ if REDIS_AVAILABLE
         config = Session::ClusterConfig.new(enabled: false, local_cache_enabled: true)
         store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         store[session.session_id] = session
 
         # Verify it's in cache
@@ -391,7 +391,7 @@ if REDIS_AVAILABLE
 
           ids = [] of String
           3.times do
-            session = Session::SessionId(UserSession).new
+            session = UserSession.new
             store[session.session_id] = session
             ids << session.session_id
           end
@@ -414,7 +414,7 @@ if REDIS_AVAILABLE
           store = Session::ClusteredRedisStore(UserSession).new(redis, config)
 
           3.times do
-            session = Session::SessionId(UserSession).new
+            session = UserSession.new
             store[session.session_id] = session
           end
 
@@ -446,7 +446,7 @@ if REDIS_AVAILABLE
         sleep(100.milliseconds) # Allow coordinators to start
 
         # Store session via node 1
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         store1[session.session_id] = session
 
         # Load session on node 2 (populates its cache)
@@ -479,7 +479,7 @@ if REDIS_AVAILABLE
 
         # Add sessions to node 2's cache
         3.times do
-          session = Session::SessionId(UserSession).new
+          session = UserSession.new
           store1[session.session_id] = session
           store2[session.session_id] # Populate node 2's cache
         end
@@ -507,7 +507,7 @@ if REDIS_AVAILABLE
 
         sleep(50.milliseconds)
 
-        session = Session::SessionId(UserSession).new
+        session = UserSession.new
         store[session.session_id] = session
 
         # Manually add to cache again to ensure it's there
