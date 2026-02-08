@@ -32,17 +32,17 @@ Create a test file to verify the installation:
 # test_session.cr
 require "session"
 
-struct TestSession
-  include Session::SessionData
+class TestSession < Session::Base
   property test : String = "Hello"
 end
 
 Session.configure do |config|
   config.secret = "test-secret-for-verification"
-  config.provider = Session::MemoryStore(TestSession).provider
+  config.store = Session::MemoryStore(TestSession).new
 end
 
-session = Session.provider.create
+store = Session.config.store.not_nil!
+session = store.create
 puts "Session ID: #{session.session_id}"
 puts "Installation successful!"
 ```

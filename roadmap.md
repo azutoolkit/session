@@ -70,8 +70,8 @@ class StorageConnectionException < Exception
 ```crystal
 # Add query interface
 module SessionQuery
-  abstract def find_by_user_id(user_id : Int64) : Array(SessionId(T))
-  abstract def find_expired : Array(SessionId(T))
+  abstract def find_by_user_id(user_id : Int64) : Array(T)
+  abstract def find_expired : Array(T)
   abstract def bulk_delete(session_ids : Array(String)) : Int64
 end
 ```
@@ -104,12 +104,12 @@ end
 # Add environment-specific configuration
 Session.configure(:production) do |c|
   c.timeout = 30.minutes
-  c.provider = Session::RedisStore(UserSession).provider
+  c.store = Session::RedisStore(UserSession).new
 end
 
 Session.configure(:development) do |c|
   c.timeout = 24.hours
-  c.provider = Session::MemoryStore(UserSession).provider
+  c.store = Session::MemoryStore(UserSession).new
 end
 ```
 

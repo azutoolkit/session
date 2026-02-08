@@ -7,7 +7,7 @@ Configure Session to match your application's requirements.
 ```crystal
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
 ```
 
@@ -20,7 +20,7 @@ Session provides presets for common scenarios, reducing configuration from 14+ l
 ```crystal
 Session.configure do |config|
   config = Configuration.from_preset(:development)
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
 ```
 
@@ -30,7 +30,7 @@ end
 Session.configure do |config|
   config = Configuration.from_preset(:production)
   config.secret = ENV.fetch("SESSION_SECRET")
-  config.provider = Session::RedisStore(UserSession).new(client: Redis.new)
+  config.store = Session::RedisStore(UserSession).new(client: Redis.new)
 end
 ```
 
@@ -57,11 +57,9 @@ Session.configure do |config|
   config.bind_to_user_agent = true
 
   config.secret = ENV.fetch("SESSION_SECRET")
-  config.provider = Session::RedisStore(UserSession).new
+  config.store = Session::RedisStore(UserSession).new
 end
 ```
-
-See [Phase 2: Developer Experience](../architecture/phase-2-developer-experience.md) for complete preset documentation.
 
 ## Full Configuration
 
@@ -72,8 +70,8 @@ Session.configure do |config|
   config.timeout = 1.hour                     # Session lifetime
   config.session_key = "_session"             # Cookie name
 
-  # Storage provider
-  config.provider = Session::RedisStore(UserSession).provider(
+  # Storage store
+  config.store = Session::RedisStore(UserSession).new(
     client: Redis.new
   )
 end
@@ -86,7 +84,7 @@ end
 | `secret` | `String` | (default) | Encryption secret (32+ chars recommended) |
 | `timeout` | `Time::Span` | `1.hour` | Session lifetime |
 | `session_key` | `String` | `"_session"` | Cookie name |
-| `provider` | `Provider` | `nil` | Storage backend |
+| `store` | `Store` | `nil` | Storage backend |
 
 ## Environment-Based Configuration
 
@@ -98,15 +96,15 @@ Session.configure do |config|
   when "production"
     config.timeout = 24.hours
     config.require_secure_secret = true
-    config.provider = Session::RedisStore(UserSession).provider(
+    config.store = Session::RedisStore(UserSession).new(
       client: Redis.new(url: ENV["REDIS_URL"])
     )
   when "test"
     config.timeout = 5.minutes
-    config.provider = Session::MemoryStore(UserSession).provider
+    config.store = Session::MemoryStore(UserSession).new
   else # development
     config.timeout = 1.hour
-    config.provider = Session::MemoryStore(UserSession).provider
+    config.store = Session::MemoryStore(UserSession).new
   end
 end
 ```
@@ -120,8 +118,8 @@ config = Session.config
 puts config.timeout        # => 1.hour
 puts config.session_key    # => "_session"
 
-# Get configured provider
-provider = Session.provider
+# Get configured store
+store = Session.config.store.not_nil!
 ```
 
 ## Related

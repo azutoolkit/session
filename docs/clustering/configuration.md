@@ -25,7 +25,7 @@ Session.configure do |config|
   # Enable clustering with defaults
   config.cluster.enabled = true
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new
   )
 end
@@ -47,7 +47,7 @@ Session.configure do |config|
   config.cluster.local_cache_max_size = 50_000
   config.cluster.subscribe_timeout = 10.seconds
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new(host: "redis.example.com", port: 6379)
   )
 end
@@ -154,7 +154,7 @@ When the cache reaches max size:
 
 Memory estimation:
 - Each cached session uses approximately 1-5 KB depending on data size
-- 10,000 sessions ≈ 10-50 MB memory usage
+- 10,000 sessions ~ 10-50 MB memory usage
 
 ## Passing Config to ClusteredRedisStore
 
@@ -162,7 +162,7 @@ You can pass configuration directly to the store:
 
 ```crystal
 # Using global config
-config.provider = Session::ClusteredRedisStore(UserSession).new(
+config.store = Session::ClusteredRedisStore(UserSession).new(
   client: Redis.new
 )  # Uses Session.config.cluster
 
@@ -173,7 +173,7 @@ custom_config = Session::ClusterConfig.new(
   local_cache_ttl: 1.minute
 )
 
-config.provider = Session::ClusteredRedisStore(UserSession).new(
+config.store = Session::ClusteredRedisStore(UserSession).new(
   client: Redis.new,
   config: custom_config
 )
@@ -201,7 +201,7 @@ Session.configure do |config|
   end
 
   redis_url = ENV["REDIS_URL"]? || "redis://localhost:6379"
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new(url: redis_url)
   )
 end
@@ -220,7 +220,7 @@ Session.configure do |config|
     reset_timeout: 30.seconds
   )
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new
   )
 end
@@ -233,7 +233,7 @@ Session.configure do |config|
   config.cluster.enabled = true
   config.encrypt_redis_data = true  # Encrypt data at rest in Redis
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new
   )
 end
@@ -247,7 +247,7 @@ Session.configure do |config|
   config.compress_data = true
   config.compression_threshold = 512
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new
   )
 end

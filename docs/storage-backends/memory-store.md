@@ -14,7 +14,7 @@ flowchart LR
 
 ```crystal
 Session.configure do |config|
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
 ```
 

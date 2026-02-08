@@ -1,12 +1,10 @@
 # Error Handling and Resilience Example
-# This example demonstrates how to use the new error handling features
+# This example demonstrates how to use the error handling features
 
 require "../src/session"
 
 # Define a session data structure
-struct UserSession
-  include Session::SessionData
-
+class UserSession < Session::Base
   property user_id : Int64?
   property username : String?
   property login_attempts : Int32 = 0
@@ -48,21 +46,21 @@ Session.configure do |c|
   c.fail_fast_on_corruption = true
 
   # Set up Redis store with error handling
-  c.provider = Session::RedisStore(UserSession).provider(client: Redis.new)
+  c.store = Session::RedisStore(UserSession).new(client: Redis.new)
 end
 
 # Example: Handling session operations with error handling
 class SessionManager
-  def initialize(@session = Session.session)
+  def initialize(@store : Session::Store(UserSession))
   end
 
   # Example: Create session with error handling
   def create_user_session(user_id : Int64, username : String) : Bool
-    session = @session.create
-    session.data.user_id = user_id
-    session.data.username = username
-    session.data.last_login = Time.utc
-    session.data.reset_login_attempts
+    @store.create
+    @store.current_session.user_id = user_id
+    @store.current_session.username = username
+    @store.current_session.last_login = Time.utc
+    @store.current_session.reset_login_attempts
 
     Log.info { "Created session for user #{username}" }
     true
@@ -79,8 +77,8 @@ class SessionManager
 
   # Example: Load session with error handling
   def load_user_session : UserSession?
-    @session.load_from(HTTP::Cookies.new) # In real app, pass actual cookies
-    @session.data
+    @store.load_from(HTTP::Cookies.new) # In real app, pass actual cookies
+    @store.current_session
   rescue ex : Session::SessionExpiredException
     Log.info { "Session expired, creating new session" }
     create_new_session
@@ -108,9 +106,9 @@ class SessionManager
       updates.each do |key, value|
         case key
         when "username"
-          @session.data.username = value
+          @store.current_session.username = value
         when "mfa_verified"
-          @session.data.mfa_verified = value == "true"
+          @store.current_session.mfa_verified = value == "true"
         end
       end
       true
@@ -125,7 +123,7 @@ class SessionManager
 
   # Example: Delete session with error handling
   def delete_user_session : Bool
-    @session.delete
+    @store.delete
     Log.info { "Deleted user session" }
     true
   rescue ex : Session::StorageConnectionException
@@ -139,7 +137,7 @@ class SessionManager
 
   # Example: Check session health
   def check_session_health : Bool
-    if store = @session.as?(Session::RedisStore(UserSession))
+    if store = @store.as?(Session::RedisStore(UserSession))
       store.healthy?
     else
       true # Memory store is always healthy
@@ -151,7 +149,7 @@ class SessionManager
 
   # Example: Clean up expired sessions (for memory store)
   def cleanup_expired_sessions : Int32
-    if store = @session.as?(Session::MemoryStore(UserSession))
+    if store = @store.as?(Session::MemoryStore(UserSession))
       store.cleanup_expired
     else
       0
@@ -163,7 +161,7 @@ class SessionManager
 
   # Example: Get session statistics
   def get_session_stats : Hash(String, Int32)
-    if store = @session.as?(Session::MemoryStore(UserSession))
+    if store = @store.as?(Session::MemoryStore(UserSession))
       stats = store.memory_stats
       {
         "total_sessions"   => stats[:total_sessions],
@@ -179,15 +177,15 @@ class SessionManager
   end
 
   private def create_new_session : UserSession?
-    @session.create
-    @session.data
+    @store.create
+    @store.current_session
   rescue ex : Exception
     Log.error { "Failed to create new session: #{ex.message}" }
     nil
   end
 
   private def clear_corrupted_session
-    @session.delete
+    @store.delete
   rescue ex : Exception
     Log.warn { "Failed to clear corrupted session: #{ex.message}" }
   end
@@ -247,39 +245,40 @@ puts "Error Handling and Resilience Example"
 puts "====================================="
 
 # Create session manager
-session_manager = SessionManager.new
+store = Session.config.store.as(Session::Store(UserSession))
+session_manager = SessionManager.new(store)
 
 # Example: Create a user session
 puts "\n1. Creating user session..."
 if session_manager.create_user_session(123_i64, "john_doe")
-  puts "✓ Session created successfully"
+  puts "Session created successfully"
 else
-  puts "✗ Failed to create session"
+  puts "Failed to create session"
 end
 
 # Example: Load session
 puts "\n2. Loading user session..."
 if user_session = session_manager.load_user_session
-  puts "✓ Session loaded: #{user_session.username}"
+  puts "Session loaded: #{user_session.username}"
 else
-  puts "✗ Failed to load session"
+  puts "Failed to load session"
 end
 
 # Example: Update session with retry
 puts "\n3. Updating session data..."
 updates = {"username" => "john_updated", "mfa_verified" => "true"}
 if session_manager.update_session_data(updates)
-  puts "✓ Session updated successfully"
+  puts "Session updated successfully"
 else
-  puts "✗ Failed to update session"
+  puts "Failed to update session"
 end
 
 # Example: Check session health
 puts "\n4. Checking session health..."
 if session_manager.check_session_health
-  puts "✓ Session storage is healthy"
+  puts "Session storage is healthy"
 else
-  puts "✗ Session storage health check failed"
+  puts "Session storage health check failed"
 end
 
 # Example: Get session statistics
@@ -295,9 +294,9 @@ puts "Cleaned up #{cleaned} expired sessions"
 # Example: Delete session
 puts "\n7. Deleting user session..."
 if session_manager.delete_user_session
-  puts "✓ Session deleted successfully"
+  puts "Session deleted successfully"
 else
-  puts "✗ Failed to delete session"
+  puts "Failed to delete session"
 end
 
 puts "\nExample completed!"

@@ -38,7 +38,7 @@ graph TD
 ### Cookie Store
 
 ```crystal
-config.provider = Session::CookieStore(UserSession).provider
+config.store = Session::CookieStore(UserSession).new
 ```
 
 **Use when:**
@@ -49,7 +49,7 @@ config.provider = Session::CookieStore(UserSession).provider
 ### Memory Store
 
 ```crystal
-config.provider = Session::MemoryStore(UserSession).provider
+config.store = Session::MemoryStore(UserSession).new
 ```
 
 **Use when:**
@@ -60,7 +60,7 @@ config.provider = Session::MemoryStore(UserSession).provider
 ### Redis Store
 
 ```crystal
-config.provider = Session::RedisStore(UserSession).provider(
+config.store = Session::RedisStore(UserSession).new(
   client: Redis.new
 )
 ```
@@ -74,7 +74,7 @@ config.provider = Session::RedisStore(UserSession).provider(
 
 ```crystal
 config.cluster.enabled = true
-config.provider = Session::ClusteredRedisStore(UserSession).new(
+config.store = Session::ClusteredRedisStore(UserSession).new(
   client: Redis.new
 )
 ```

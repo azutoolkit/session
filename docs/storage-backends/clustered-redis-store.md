@@ -27,8 +27,7 @@ flowchart LR
 require "session"
 
 # Define session data
-struct UserSession
-  include Session::SessionData
+class UserSession < Session::Base
   property user_id : Int64?
   property username : String?
 end
@@ -43,7 +42,7 @@ Session.configure do |config|
   config.cluster.node_id = ENV["NODE_ID"]? || UUID.random.to_s
 
   # Use clustered store
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new(host: "redis.example.com")
   )
 end
@@ -178,14 +177,14 @@ store.shutdown  # Stops coordinator, closes Redis
 ```crystal
 # Iterate all sessions
 store.each_session do |session|
-  puts session.data.username
+  puts session.username
 end
 
 # Get all session IDs
 ids = store.all_session_ids
 
 # Bulk delete with predicate
-deleted = store.bulk_delete { |s| s.data.user_id == compromised_id }
+deleted = store.bulk_delete { |s| s.user_id == compromised_id }
 ```
 
 ## Configuration Examples
@@ -209,7 +208,7 @@ Session.configure do |config|
   config.enable_retry = true
   config.encrypt_redis_data = true
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new(
       host: ENV["REDIS_HOST"],
       port: ENV["REDIS_PORT"].to_i,
@@ -231,7 +230,7 @@ Session.configure do |config|
   config.cluster.local_cache_enabled = true
   config.cluster.local_cache_ttl = 10.seconds
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new
   )
 end
@@ -252,7 +251,7 @@ Session.configure do |config|
   config.compress_data = true
   config.compression_threshold = 256
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new(host: "redis-cluster.internal")
   )
 end

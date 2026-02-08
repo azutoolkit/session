@@ -16,7 +16,7 @@ flowchart LR
 
 ```crystal
 Session.configure do |config|
-  config.provider = Session::RedisStore(UserSession).new(
+  config.store = Session::RedisStore(UserSession).new(
     client: Redis.new(host: "localhost", port: 6379)
   )
 end
@@ -33,7 +33,7 @@ Session.configure do |config|
     size: 20,
     timeout: 2.seconds
   )
-  config.provider = Session::RedisStore(UserSession).with_pool(pool_config)
+  config.store = Session::RedisStore(UserSession).with_pool(pool_config)
 end
 ```
 
@@ -41,12 +41,10 @@ Or with an existing pool:
 
 ```crystal
 pool = Session::ConnectionPool.new(config)
-config.provider = Session::RedisStore(UserSession).new(pool: pool)
+config.store = Session::RedisStore(UserSession).new(pool: pool)
 ```
 
 **Note:** `PooledRedisStore` is deprecated. Use `RedisStore.with_pool()` instead.
-
-See [Phase 3: Store Consolidation](../architecture/phase-3-store-consolidation.md) for migration details.
 
 ## Characteristics
 
@@ -69,7 +67,7 @@ See [Phase 3: Store Consolidation](../architecture/phase-3-store-consolidation.m
 ```crystal
 Session.configure do |config|
   config.encrypt_redis_data = true
-  config.provider = Session::RedisStore(UserSession).provider(
+  config.store = Session::RedisStore(UserSession).new(
     client: Redis.new
   )
 end
@@ -80,7 +78,7 @@ end
 ```crystal
 Session.configure do |config|
   config.circuit_breaker_enabled = true
-  config.provider = Session::RedisStore(UserSession).provider(
+  config.store = Session::RedisStore(UserSession).new(
     client: Redis.new
   )
 end

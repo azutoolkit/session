@@ -113,14 +113,14 @@ The Redis store now includes:
 4. **Health Monitoring**: Health check methods for monitoring
 
 ```crystal
-def [](key : String) : SessionId(T)
+def [](key : String) : T
   Retry.with_retry_if(
     ->(ex : Exception) { Retry.retryable_connection_error?(ex) },
     Session.config.retry_config
   ) do
     if data = @client.get(prefixed(key))
       begin
-        SessionId(T).from_json(data)
+        T.from_json(data)
       rescue ex : JSON::ParseException
         Log.error { "Failed to parse session data for key #{key}: #{ex.message}" }
         raise SessionCorruptionException.new("Invalid JSON in session data", ex)
@@ -153,7 +153,7 @@ The memory store now includes:
 4. **Cleanup Methods**: Manual cleanup of expired sessions
 
 ```crystal
-def [](key : String) : SessionId(T)
+def [](key : String) : T
   if session = sessions[key]?
     if session.valid?
       session
@@ -199,11 +199,11 @@ The cookie store now includes:
 4. **Graceful Fallbacks**: Fallback behavior when encryption fails
 
 ```crystal
-def [](key : String) : SessionId(T)
+def [](key : String) : T
   if data = cookies[data_key]?
     begin
       payload = String.new(verify_and_decrypt(data.value))
-      SessionId(T).from_json payload
+      T.from_json payload
     rescue ex : Session::SessionEncryptionException
       Log.error { "Failed to decrypt session data: #{ex.message}" }
       raise SessionCorruptionException.new("Session data corruption detected", ex)

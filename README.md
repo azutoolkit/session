@@ -12,11 +12,11 @@
 
 | | |
 |---|---|
-| **Type-Safe** | Define sessions as Crystal structs with compile-time guarantees |
+| **Type-Safe** | Define sessions as Crystal classes with compile-time guarantees |
 | **Multiple Backends** | Cookie, Memory, Redis, or Clustered Redis—pick what fits |
 | **Battle-Tested Security** | AES-256 encryption, HMAC-SHA256, PBKDF2, client binding |
 | **Production Resilience** | Circuit breakers, retry logic, graceful degradation |
-| **329+ Tests** | Comprehensive coverage you can rely on |
+| **346 Tests** | Comprehensive coverage you can rely on |
 
 ---
 
@@ -36,22 +36,21 @@ dependencies:
 require "session"
 
 # Define your session data
-struct UserSession
-  include Session::SessionData
-  property user_id : Int64?
-  property username : String?
+class UserSession < Session::Base
+  property? authenticated : Bool = false
+  property username : String? = nil
 end
 
 # Configure once
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
 
 # Create and use sessions
-session = Session.provider.create
-session.data.user_id = 42
-session.data.username = "alice"
+store = Session.config.store.not_nil!
+session = store.create
+session.username = "alice"
 ```
 
 That's it. You're ready to build.
@@ -71,17 +70,17 @@ That's it. You're ready to build.
 
 ```crystal
 # Cookie (stateless, client-side)
-config.provider = Session::CookieStore(UserSession).provider
+config.store = Session::CookieStore(UserSession).new
 
 # Memory (development)
-config.provider = Session::MemoryStore(UserSession).provider
+config.store = Session::MemoryStore(UserSession).new
 
 # Redis (production)
-config.provider = Session::RedisStore(UserSession).provider(client: Redis.new)
+config.store = Session::RedisStore(UserSession).new(client: Redis.new)
 
 # Clustered Redis (high-scale production)
 config.cluster.enabled = true
-config.provider = Session::ClusteredRedisStore(UserSession).new(client: Redis.new)
+config.store = Session::ClusteredRedisStore(UserSession).new(client: Redis.new)
 ```
 
 ### Security
@@ -152,7 +151,7 @@ Session.configure do |config|
   config.cluster.local_cache_ttl = 30.seconds
   config.cluster.local_cache_max_size = 10_000
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new(url: ENV["REDIS_URL"])
   )
 end
@@ -162,26 +161,26 @@ end
 
 ## API Essentials
 
-### Provider Operations
+### Store Operations
 
 ```crystal
-provider = Session.provider
+store = Session.config.store.not_nil!
 
-provider.create              # New session
-provider.delete              # Destroy session
-provider.regenerate_id       # New ID, keep data (post-login security)
-provider.valid?              # Check validity
-provider.data                # Access your typed session data
-provider.flash               # One-request flash messages
+store.create              # New session
+store.delete              # Destroy session
+store.regenerate_id       # New ID, keep data (post-login security)
+store.valid?              # Check validity
+store.current_session     # Access your typed session data
+store.flash               # One-request flash messages
 ```
 
 ### Session Object
 
 ```crystal
-session = provider.current_session
+session = store.current_session
 
 session.session_id           # Unique ID
-session.data                 # Your SessionData struct
+session.username             # Your session properties directly
 session.valid?               # Not expired?
 session.expired?             # Past expiration?
 session.time_until_expiry    # Remaining lifetime
@@ -192,11 +191,11 @@ session.touch                # Extend expiration
 
 ```crystal
 # Set (available next request)
-provider.flash["notice"] = "Saved successfully"
-provider.flash["error"] = "Something went wrong"
+store.flash["notice"] = "Saved successfully"
+store.flash["error"] = "Something went wrong"
 
 # Read (clears after access)
-provider.flash.now["notice"]  # => "Saved successfully"
+store.flash.now["notice"]  # => "Saved successfully"
 ```
 
 ### Query & Bulk Operations
@@ -205,13 +204,13 @@ provider.flash.now["notice"]  # => "Saved successfully"
 store = Session::MemoryStore(UserSession).new
 
 # Iterate sessions
-store.each_session { |s| puts s.data.username }
+store.each_session { |s| puts s.username }
 
 # Find by criteria
-admins = store.find_by { |s| s.data.roles.includes?("admin") }
+admins = store.find_by { |s| s.roles.includes?("admin") }
 
 # Bulk delete (e.g., revoke compromised user)
-store.bulk_delete { |s| s.data.user_id == compromised_id }
+store.bulk_delete { |s| s.user_id == compromised_id }
 ```
 
 ---
@@ -223,11 +222,13 @@ require "http/server"
 
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
 
+store = Session.config.store.not_nil!
+
 server = HTTP::Server.new([
-  Session::SessionHandler.new(Session.provider),
+  Session::SessionHandler.new(store),
   YourAppHandler.new,
 ])
 
@@ -269,8 +270,8 @@ Session.configure do |config|
   config.cluster.local_cache_max_size = 10_000
 
   # Callbacks
-  config.on_started = ->(id, data) { Log.info { "Session #{id} created" } }
-  config.on_deleted = ->(id, data) { Log.info { "Session #{id} destroyed" } }
+  config.on_started = ->(id : String, session : Session::Base) { Log.info { "Session #{id} created" } }
+  config.on_deleted = ->(id : String, session : Session::Base) { Log.info { "Session #{id} destroyed" } }
 
   # Metrics
   config.metrics_backend = Session::Metrics::LogBackend.new
@@ -290,6 +291,7 @@ Full documentation available at [GitBook](https://azutoolkit.gitbook.io/session)
 - [Security Best Practices](docs/configuration/security.md)
 - [AZU Framework Integration](docs/integrations/azu-framework.md)
 - [HTTP::Server Integration](docs/integrations/http-server.md)
+- [Upgrade Guide](UPGRADE.md)
 
 ---
 

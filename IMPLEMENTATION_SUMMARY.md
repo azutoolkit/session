@@ -190,19 +190,20 @@ Session::Retry.with_retry_if(
 end
 ```
 
-## 🔍 Monitoring and Health Checks
+## Monitoring and Health Checks
 
 ### Health Check Methods
 
 ```crystal
 # Check Redis store health
-if store = session.as?(Session::RedisStore(UserSession))
-  store.healthy?
+store = Session.config.store.not_nil!
+if redis_store = store.as?(Session::RedisStore(UserSession))
+  redis_store.healthy?
 end
 
 # Get memory store statistics
-if store = session.as?(Session::MemoryStore(UserSession))
-  stats = store.memory_stats
+if memory_store = store.as?(Session::MemoryStore(UserSession))
+  stats = memory_store.memory_stats
   puts "Total sessions: #{stats[:total_sessions]}"
   puts "Valid sessions: #{stats[:valid_sessions]}"
   puts "Expired sessions: #{stats[:expired_sessions]}"
@@ -213,8 +214,9 @@ end
 
 ```crystal
 # Clean up expired sessions (memory store)
-if store = session.as?(Session::MemoryStore(UserSession))
-  cleaned = store.cleanup_expired
+store = Session.config.store.not_nil!
+if memory_store = store.as?(Session::MemoryStore(UserSession))
+  cleaned = memory_store.cleanup_expired
   puts "Cleaned up #{cleaned} expired sessions"
 end
 ```

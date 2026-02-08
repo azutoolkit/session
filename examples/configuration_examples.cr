@@ -13,7 +13,7 @@ Session.configure do |config|
   config.timeout = 2.hours
 
   # Set your store
-  config.store = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
 
 # Production environment - balanced security and performance
@@ -30,7 +30,7 @@ Session.configure do |config|
     host: ENV["REDIS_HOST"]? || "localhost",
     port: ENV["REDIS_PORT"]?.try(&.to_i) || 6379
   )
-  config.store = Session::RedisStore(UserSession).provider(client: redis)
+  config.store = Session::RedisStore(UserSession).new(client: redis)
 end
 
 # High security environment - maximum security
@@ -48,7 +48,7 @@ Session.configure do |config|
     redis_host: ENV["REDIS_HOST"]? || "localhost",
     redis_port: ENV["REDIS_PORT"]?.try(&.to_i) || 6379
   )
-  config.provider = Session::PooledRedisStore(UserSession).new(pool_config)
+  config.store = Session::RedisStore(UserSession).with_pool(pool_config)
 end
 
 # Testing environment - fast and simple
@@ -57,7 +57,7 @@ Session.configure do |config|
   config.apply_preset(:testing)
 
   # Use memory store for tests
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
 
 # Clustered environment - multi-node deployment
@@ -80,7 +80,7 @@ Session.configure do |config|
     local_cache_ttl: 1.minute,
     local_cache_max_size: 50_000
   )
-  config.provider = Session::ClusteredRedisStore(UserSession).new(redis, cluster_config)
+  config.store = Session::ClusteredRedisStore(UserSession).new(redis, cluster_config)
 end
 
 # Example 2: Manual Configuration (No Preset)
@@ -111,8 +111,8 @@ Session.configure do |config|
   config.circuit_breaker_enabled = true
   config.enable_retry = true
 
-  # Provider
-  config.provider = Session::RedisStore(UserSession).provider
+  # Store
+  config.store = Session::RedisStore(UserSession).new
 end
 
 # Example 3: Preset with Selective Overrides
@@ -128,7 +128,7 @@ Session.configure do |config|
   config.compression_threshold = 1024 # Larger threshold
 
   config.secret = ENV.fetch("SESSION_SECRET")
-  config.provider = Session::RedisStore(UserSession).provider
+  config.store = Session::RedisStore(UserSession).new
 end
 
 # Example 4: Environment-Based Configuration
@@ -140,20 +140,20 @@ Session.configure do |config|
   case environment
   when "development"
     config.apply_preset(:development)
-    config.provider = Session::MemoryStore(UserSession).provider
+    config.store = Session::MemoryStore(UserSession).new
   when "test"
     config.apply_preset(:testing)
-    config.provider = Session::MemoryStore(UserSession).provider
+    config.store = Session::MemoryStore(UserSession).new
   when "staging"
     config.apply_preset(:production)
     config.secret = ENV.fetch("SESSION_SECRET")
     redis = Redis.new(host: ENV["REDIS_HOST"]?)
-    config.provider = Session::RedisStore(UserSession).provider(client: redis)
+    config.store = Session::RedisStore(UserSession).new(client: redis)
   when "production"
     config.apply_preset(:high_security)
     config.secret = ENV.fetch("SESSION_SECRET")
     pool_config = Session::ConnectionPoolConfig.new(size: 20)
-    config.provider = Session::PooledRedisStore(UserSession).new(pool_config)
+    config.store = Session::RedisStore(UserSession).with_pool(pool_config)
   else
     raise "Unknown environment: #{environment}"
   end
@@ -162,9 +162,7 @@ end
 # Example Session Data Structure
 # ==============================
 
-struct UserSession
-  include Session::SessionData
-
+class UserSession < Session::Base
   property user_id : Int64?
   property username : String?
   property email : String?

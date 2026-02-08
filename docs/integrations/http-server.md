@@ -19,9 +19,7 @@ flowchart LR
 ```crystal
 require "session"
 
-struct UserSession
-  include Session::SessionData
-
+class UserSession < Session::Base
   property user_id : Int64?
   property username : String?
   property role : String = "guest"
@@ -35,7 +33,7 @@ Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
   config.timeout = 24.hours
   config.session_key = "_myapp_session"
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
 ```
 
@@ -46,8 +44,10 @@ Session provides a ready-to-use `SessionHandler`:
 ```crystal
 require "http/server"
 
+store = Session.config.store.not_nil!
+
 server = HTTP::Server.new([
-  Session::SessionHandler.new(Session.provider),
+  Session::SessionHandler.new(store),
   MyAppHandler.new,
 ])
 
@@ -62,41 +62,41 @@ class MyAppHandler
   include HTTP::Handler
 
   def call(context : HTTP::Server::Context)
-    provider = Session.provider
+    store = Session.config.store.not_nil!
 
     case context.request.path
     when "/login"
-      handle_login(context, provider)
+      handle_login(context, store)
     when "/profile"
-      handle_profile(context, provider)
+      handle_profile(context, store)
     when "/logout"
-      handle_logout(context, provider)
+      handle_logout(context, store)
     else
       context.response.print "Hello! <a href='/login'>Login</a>"
     end
   end
 
-  private def handle_login(context, provider)
+  private def handle_login(context, store)
     # Create or regenerate session
-    provider.regenerate_id
-    provider.data.user_id = 1
-    provider.data.username = "alice"
-    provider.data.role = "admin"
+    store.regenerate_id
+    store.current_session.user_id = 1
+    store.current_session.username = "alice"
+    store.current_session.role = "admin"
 
-    provider.flash["notice"] = "Welcome back!"
+    store.flash["notice"] = "Welcome back!"
 
     context.response.status = HTTP::Status::FOUND
     context.response.headers["Location"] = "/profile"
   end
 
-  private def handle_profile(context, provider)
-    if provider.data.user_id
-      notice = provider.flash.now["notice"]?
+  private def handle_profile(context, store)
+    if store.current_session.user_id
+      notice = store.flash.now["notice"]?
       html = <<-HTML
         #{notice ? "<p style='color:green'>#{notice}</p>" : ""}
         <h1>Profile</h1>
-        <p>User: #{provider.data.username}</p>
-        <p>Role: #{provider.data.role}</p>
+        <p>User: #{store.current_session.username}</p>
+        <p>Role: #{store.current_session.role}</p>
         <a href="/logout">Logout</a>
       HTML
       context.response.print html
@@ -106,9 +106,9 @@ class MyAppHandler
     end
   end
 
-  private def handle_logout(context, provider)
-    provider.delete
-    provider.flash["notice"] = "You have been logged out"
+  private def handle_logout(context, store)
+    store.delete
+    store.flash["notice"] = "You have been logged out"
 
     context.response.status = HTTP::Status::FOUND
     context.response.headers["Location"] = "/"
@@ -124,18 +124,18 @@ If you need custom behavior, implement your own handler:
 class CustomSessionHandler
   include HTTP::Handler
 
-  def initialize(@provider : Session::Provider(UserSession))
+  def initialize(@store : Session::MemoryStore(UserSession))
   end
 
   def call(context : HTTP::Server::Context)
     # Load session from request cookies
-    @provider.load_from(context.request.cookies)
+    @store.load_from(context.request.cookies)
 
     begin
       call_next(context)
     ensure
       # Always set session cookie in response
-      @provider.set_cookies(context.response.cookies)
+      @store.set_cookies(context.response.cookies)
     end
   rescue Session::SessionExpiredException
     handle_expired_session(context)
@@ -144,16 +144,16 @@ class CustomSessionHandler
   end
 
   private def handle_expired_session(context)
-    @provider.create
+    @store.create
     call_next(context)
-    @provider.set_cookies(context.response.cookies)
+    @store.set_cookies(context.response.cookies)
   end
 
   private def handle_corrupted_session(context)
-    @provider.create
-    @provider.flash["error"] = "Your session was invalid. Please log in again."
+    @store.create
+    @store.flash["error"] = "Your session was invalid. Please log in again."
     call_next(context)
-    @provider.set_cookies(context.response.cookies)
+    @store.set_cookies(context.response.cookies)
   end
 end
 ```
@@ -165,8 +165,7 @@ require "http/server"
 require "session"
 
 # Define session structure
-struct UserSession
-  include Session::SessionData
+class UserSession < Session::Base
   property user_id : Int64?
   property username : String?
   property cart_items : Array(Int64) = [] of Int64
@@ -177,31 +176,33 @@ Session.configure do |config|
   config.secret = ENV.fetch("SESSION_SECRET", "dev-secret-change-in-production!")
   config.timeout = 1.hour
   config.sliding_expiration = true
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
+
+store = Session.config.store.not_nil!
 
 # Application handler
 class AppHandler
   include HTTP::Handler
 
   def call(context : HTTP::Server::Context)
-    provider = Session.provider
+    store = Session.config.store.not_nil!
 
     case {context.request.method, context.request.path}
     when {"GET", "/"}
-      render_home(context, provider)
+      render_home(context, store)
     when {"POST", "/cart/add"}
-      add_to_cart(context, provider)
+      add_to_cart(context, store)
     when {"GET", "/cart"}
-      show_cart(context, provider)
+      show_cart(context, store)
     else
       context.response.status = HTTP::Status::NOT_FOUND
       context.response.print "Not Found"
     end
   end
 
-  private def render_home(context, provider)
-    cart_count = provider.data.cart_items.size
+  private def render_home(context, store)
+    cart_count = store.current_session.cart_items.size
     context.response.content_type = "text/html"
     context.response.print <<-HTML
       <h1>Shop</h1>
@@ -214,17 +215,17 @@ class AppHandler
     HTML
   end
 
-  private def add_to_cart(context, provider)
+  private def add_to_cart(context, store)
     if item_id = context.request.form_params["item_id"]?
-      provider.data.cart_items << item_id.to_i64
-      provider.flash["notice"] = "Item added to cart!"
+      store.current_session.cart_items << item_id.to_i64
+      store.flash["notice"] = "Item added to cart!"
     end
     context.response.status = HTTP::Status::FOUND
     context.response.headers["Location"] = "/"
   end
 
-  private def show_cart(context, provider)
-    items = provider.data.cart_items
+  private def show_cart(context, store)
+    items = store.current_session.cart_items
     context.response.content_type = "text/html"
     context.response.print <<-HTML
       <h1>Your Cart</h1>
@@ -238,7 +239,7 @@ end
 
 # Start server
 server = HTTP::Server.new([
-  Session::SessionHandler.new(Session.provider),
+  Session::SessionHandler.new(store),
   AppHandler.new,
 ])
 
@@ -265,7 +266,7 @@ Session.configure do |config|
   config.compress_data = true
 
   # Use Redis for production
-  config.provider = Session::RedisStore(UserSession).provider(
+  config.store = Session::RedisStore(UserSession).new(
     client: Redis.new(url: ENV["REDIS_URL"])
   )
 
@@ -280,11 +281,13 @@ end
 Place the session handler early in the chain, after request tracking but before your application logic:
 
 ```crystal
+store = Session.config.store.not_nil!
+
 server = HTTP::Server.new([
-  HTTP::LogHandler.new,                           # 1. Logging
-  HTTP::ErrorHandler.new,                         # 2. Error handling
-  Session::SessionHandler.new(Session.provider),  # 3. Session management
-  AuthHandler.new,                                # 4. Authentication
-  AppHandler.new,                                 # 5. Application
+  HTTP::LogHandler.new,                       # 1. Logging
+  HTTP::ErrorHandler.new,                     # 2. Error handling
+  Session::SessionHandler.new(store),         # 3. Session management
+  AuthHandler.new,                            # 4. Authentication
+  AppHandler.new,                             # 5. Application
 ])
 ```

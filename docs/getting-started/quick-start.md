@@ -4,14 +4,12 @@ This guide walks you through creating your first session-enabled application.
 
 ## Step 1: Define Session Data
 
-Create a struct that includes `Session::SessionData`:
+Create a class that extends `Session::Base`:
 
 ```crystal
 require "session"
 
-struct UserSession
-  include Session::SessionData
-
+class UserSession < Session::Base
   property user_id : Int64?
   property username : String?
   property email : String?
@@ -44,7 +42,7 @@ Session.configure do |config|
   config.session_key = "myapp_session"
 
   # Choose a storage backend
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
 ```
 
@@ -53,45 +51,45 @@ end
 ### Create a Session
 
 ```crystal
-provider = Session.provider
+store = Session.config.store.not_nil!
 
 # Create a new session
-session = provider.create
+session = store.create
 
 # Access session data
-session.data.user_id = 12345
-session.data.username = "alice"
-session.data.email = "alice@example.com"
-session.data.role = "admin"
-session.data.login_time = Time.utc
+session.user_id = 12345
+session.username = "alice"
+session.email = "alice@example.com"
+session.role = "admin"
+session.login_time = Time.utc
 
 puts "Session ID: #{session.session_id}"
-puts "Username: #{session.data.username}"
-puts "Is Admin: #{session.data.admin?}"
+puts "Username: #{session.username}"
+puts "Is Admin: #{session.admin?}"
 ```
 
 ### Retrieve a Session
 
 ```crystal
 # Get session by ID (raises if not found)
-session = provider[session_id]
+session = store[session_id]
 
 # Get session by ID (returns nil if not found)
-session = provider[session_id]?
+session = store[session_id]?
 ```
 
 ### Update a Session
 
 ```crystal
-session = provider[session_id]
-session.data.role = "moderator"
-provider[session_id] = session  # Save changes
+session = store[session_id]
+session.role = "moderator"
+store[session_id] = session  # Save changes
 ```
 
 ### Delete a Session
 
 ```crystal
-provider.delete(session_id)
+store.delete(session_id)
 ```
 
 ## Step 4: HTTP Integration
@@ -105,28 +103,28 @@ require "session"
 # Configure session
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
+
+store = Session.config.store.not_nil!
 
 # Create server with session handler
 server = HTTP::Server.new([
-  Session::SessionHandler.new(Session.provider),
+  Session::SessionHandler.new(store),
 ]) do |context|
-  provider = Session.provider
-
   case context.request.path
   when "/login"
     # Create session on login
-    session = provider.create
-    session.data.user_id = 1
-    session.data.username = "alice"
-    provider[session.session_id] = session
+    session = store.create
+    session.user_id = 1
+    session.username = "alice"
+    store[session.session_id] = session
     context.response.print "Logged in as alice"
 
   when "/profile"
     # Access session data
-    if provider.valid? && provider.data.authenticated?
-      context.response.print "Hello, #{provider.data.username}!"
+    if store.valid? && store.current_session.authenticated?
+      context.response.print "Hello, #{store.current_session.username}!"
     else
       context.response.status = HTTP::Status::UNAUTHORIZED
       context.response.print "Please log in"
@@ -134,7 +132,7 @@ server = HTTP::Server.new([
 
   when "/logout"
     # Destroy session
-    provider.delete
+    store.delete
     context.response.print "Logged out"
 
   else
@@ -152,11 +150,11 @@ Use flash messages for one-time notifications:
 
 ```crystal
 # Set flash message (available on next request)
-provider.flash["notice"] = "Your changes have been saved!"
-provider.flash["error"] = "Something went wrong."
+store.flash["notice"] = "Your changes have been saved!"
+store.flash["error"] = "Something went wrong."
 
 # In next request, access flash messages
-if notice = provider.flash.now["notice"]?
+if notice = store.flash.now["notice"]?
   puts "Notice: #{notice}"
 end
 ```
@@ -168,8 +166,7 @@ require "session"
 require "http/server"
 
 # Define session data
-struct UserSession
-  include Session::SessionData
+class UserSession < Session::Base
   property user_id : Int64?
   property username : String?
 
@@ -183,22 +180,22 @@ Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]? || "dev-secret-32-characters-long!!"
   config.timeout = 1.hour
   config.sliding_expiration = true
-  config.provider = Session::MemoryStore(UserSession).provider
+  config.store = Session::MemoryStore(UserSession).new
 end
+
+store = Session.config.store.not_nil!
 
 # Server
 server = HTTP::Server.new([
-  Session::SessionHandler.new(Session.provider),
+  Session::SessionHandler.new(store),
 ]) do |context|
-  provider = Session.provider
-
   # Your application logic here
   context.response.content_type = "text/html"
   context.response.print <<-HTML
     <h1>Session Demo</h1>
-    <p>Session ID: #{provider.session_id}</p>
-    <p>Authenticated: #{provider.data.authenticated?}</p>
-    <p>Username: #{provider.data.username || "Guest"}</p>
+    <p>Session ID: #{store.session_id}</p>
+    <p>Authenticated: #{store.current_session.authenticated?}</p>
+    <p>Username: #{store.current_session.username || "Guest"}</p>
   HTML
 end
 

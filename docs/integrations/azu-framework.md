@@ -30,9 +30,7 @@ dependencies:
 
 ```crystal
 # src/sessions/user_session.cr
-struct UserSession
-  include Session::SessionData
-
+class UserSession < Session::Base
   property user_id : Int64?
   property username : String?
   property email : String?
@@ -63,11 +61,11 @@ Session.configure do |config|
 
   # Use Redis for production
   if Azu.env.production?
-    config.provider = Session::RedisStore(UserSession).provider(
+    config.store = Session::RedisStore(UserSession).new(
       client: Redis.new(url: ENV["REDIS_URL"])
     )
   else
-    config.provider = Session::MemoryStore(UserSession).provider
+    config.store = Session::MemoryStore(UserSession).new
   end
 end
 ```
@@ -79,31 +77,31 @@ end
 class AzuSessionHandler
   include HTTP::Handler
 
-  def initialize(@provider : Session::Provider(UserSession))
+  def initialize(@store : Session::MemoryStore(UserSession))
   end
 
   def call(context : HTTP::Server::Context)
     # Load session from cookies
-    @provider.load_from(context.request.cookies)
+    @store.load_from(context.request.cookies)
 
-    # Store provider in context for endpoint access
-    context.set("session_provider", @provider)
+    # Store store in context for endpoint access
+    context.set("session_store", @store)
 
     # Process request
     call_next(context)
 
     # Set session cookie in response
-    @provider.set_cookies(context.response.cookies)
+    @store.set_cookies(context.response.cookies)
   rescue Session::SessionExpiredException
     # Handle expired session - create new one
-    @provider.create
+    @store.create
     call_next(context)
-    @provider.set_cookies(context.response.cookies)
+    @store.set_cookies(context.response.cookies)
   rescue Session::SessionCorruptionException
     # Handle corrupted session - create new one
-    @provider.create
+    @store.create
     call_next(context)
-    @provider.set_cookies(context.response.cookies)
+    @store.set_cookies(context.response.cookies)
   end
 end
 ```
@@ -120,10 +118,12 @@ Azu.configure do
   port = ENV.fetch("PORT", "4000").to_i
 end
 
+store = Session.config.store.not_nil!
+
 Azu.start [
   Azu::Handler::RequestId.new,
   Azu::Handler::Rescuer.new,
-  AzuSessionHandler.new(Session.provider),  # Add session handler
+  AzuSessionHandler.new(store),  # Add session handler
   Azu::Handler::Logger.new,
 ]
 ```
@@ -137,29 +137,29 @@ struct LoginEndpoint
   post "/login"
 
   def call : LoginResponse
-    # Get session provider from context
-    provider = context.get("session_provider").as(Session::Provider(UserSession))
+    # Get session store from context
+    store = context.get("session_store").as(Session::MemoryStore(UserSession))
 
     # Authenticate user
     user = authenticate(request.email, request.password)
 
     if user
       # Regenerate session ID after login (security best practice)
-      provider.regenerate_id
+      store.regenerate_id
 
       # Set session data
-      provider.data.user_id = user.id
-      provider.data.username = user.username
-      provider.data.email = user.email
-      provider.data.roles = user.roles
-      provider.data.logged_in_at = Time.utc
+      store.current_session.user_id = user.id
+      store.current_session.username = user.username
+      store.current_session.email = user.email
+      store.current_session.roles = user.roles
+      store.current_session.logged_in_at = Time.utc
 
       # Set flash message
-      provider.flash["notice"] = "Welcome back, #{user.username}!"
+      store.flash["notice"] = "Welcome back, #{user.username}!"
 
       LoginResponse.new(success: true, message: "Logged in successfully")
     else
-      provider.flash["error"] = "Invalid credentials"
+      store.flash["error"] = "Invalid credentials"
       LoginResponse.new(success: false, message: "Invalid email or password")
     end
   end
@@ -177,28 +177,24 @@ Create a helper module to simplify session access in endpoints:
 ```crystal
 # src/helpers/session_helper.cr
 module SessionHelper
-  def session_provider : Session::Provider(UserSession)
-    context.get("session_provider").as(Session::Provider(UserSession))
+  def session_store : Session::MemoryStore(UserSession)
+    context.get("session_store").as(Session::MemoryStore(UserSession))
   end
 
-  def current_session : Session::SessionId(UserSession)
-    session_provider.current_session
-  end
-
-  def session_data : UserSession
-    session_provider.data
+  def current_session : UserSession
+    session_store.current_session
   end
 
   def flash : Session::Flash
-    session_provider.flash
+    session_store.flash
   end
 
   def authenticated? : Bool
-    session_data.authenticated?
+    current_session.authenticated?
   end
 
   def current_user_id : Int64?
-    session_data.user_id
+    current_session.user_id
   end
 
   def require_authentication! : Nil
@@ -209,7 +205,7 @@ module SessionHelper
 
   def require_admin! : Nil
     require_authentication!
-    unless session_data.admin?
+    unless current_session.admin?
       raise Azu::Forbidden.new("Admin access required")
     end
   end
@@ -256,8 +252,8 @@ struct LogoutEndpoint
 
   def call : LogoutResponse
     if authenticated?
-      username = session_data.username
-      session_provider.delete  # Destroy session
+      username = current_session.username
+      session_store.delete  # Destroy session
       flash["notice"] = "Goodbye, #{username}!"
     end
 
@@ -281,7 +277,7 @@ struct HomeEndpoint
     HomeResponse.new(
       flash_notice: flash.now["notice"]?,
       flash_error: flash.now["error"]?,
-      user: authenticated? ? session_data.username : nil
+      user: authenticated? ? current_session.username : nil
     )
   end
 end
@@ -331,7 +327,7 @@ Session.configure do |config|
   config.cluster.local_cache_ttl = 30.seconds
   config.cluster.local_cache_max_size = 10_000
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new(url: ENV["REDIS_URL"])
   )
 end
@@ -347,7 +343,7 @@ Session.configure do |config|
   config.timeout = 24.hours
   config.compress_data = true  # Keep cookies small
 
-  config.provider = Session::CookieStore(UserSession).provider
+  config.store = Session::CookieStore(UserSession).new
 end
 ```
 
@@ -358,29 +354,25 @@ end
 ```crystal
 # spec/support/session_helper.cr
 def with_session(data : UserSession? = nil, &)
-  provider = Session::Provider(UserSession).new(
-    Session::MemoryStore(UserSession).new
-  )
-  provider.create
+  store = Session::MemoryStore(UserSession).new
+  store.create
 
   if data
-    provider.data.user_id = data.user_id
-    provider.data.username = data.username
-    provider.data.roles = data.roles
+    store.current_session.user_id = data.user_id
+    store.current_session.username = data.username
+    store.current_session.roles = data.roles
   end
 
-  yield provider
+  yield store
 end
 
-def authenticated_session(user : User) : Session::Provider(UserSession)
-  provider = Session::Provider(UserSession).new(
-    Session::MemoryStore(UserSession).new
-  )
-  provider.create
-  provider.data.user_id = user.id
-  provider.data.username = user.username
-  provider.data.roles = user.roles
-  provider
+def authenticated_session(user : User) : Session::MemoryStore(UserSession)
+  store = Session::MemoryStore(UserSession).new
+  store.create
+  store.current_session.user_id = user.id
+  store.current_session.username = user.username
+  store.current_session.roles = user.roles
+  store
 end
 ```
 
@@ -394,13 +386,13 @@ describe ProfileEndpoint do
   it "returns profile for authenticated user" do
     user = User.create(username: "alice", email: "alice@example.com")
 
-    with_session do |provider|
-      provider.data.user_id = user.id
-      provider.data.username = user.username
+    with_session do |store|
+      store.current_session.user_id = user.id
+      store.current_session.username = user.username
 
-      # Mock the context with session provider
+      # Mock the context with session store
       context = create_test_context("/profile")
-      context.set("session_provider", provider)
+      context.set("session_store", store)
 
       endpoint = ProfileEndpoint.new(context)
       response = endpoint.call
@@ -410,9 +402,9 @@ describe ProfileEndpoint do
   end
 
   it "rejects unauthenticated requests" do
-    with_session do |provider|
+    with_session do |store|
       context = create_test_context("/profile")
-      context.set("session_provider", provider)
+      context.set("session_store", store)
 
       endpoint = ProfileEndpoint.new(context)
 
@@ -431,8 +423,8 @@ Handle server shutdown to properly close cluster connections:
 ```crystal
 # src/app.cr
 at_exit do
-  if provider = Session.config.provider
-    if clustered = provider.as?(Session::ClusteredRedisStore(UserSession))
+  if store = Session.config.store
+    if clustered = store.as?(Session::ClusteredRedisStore(UserSession))
       clustered.shutdown
     end
   end

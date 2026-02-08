@@ -151,7 +151,7 @@ Session.configure do |config|
   redis_url = ENV["REDIS_URL"]? || "redis://localhost:6379"
   redis = Redis.new(url: redis_url)
 
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: redis
   )
 end
@@ -222,7 +222,7 @@ sequenceDiagram
 ```crystal
 # Add health check endpoint
 get "/health" do
-  store = Session.config.provider.as(Session::ClusteredRedisStore(UserSession))
+  store = Session.config.store.not_nil!.as(Session::ClusteredRedisStore(UserSession))
 
   health = {
     redis: store.healthy?,
@@ -264,9 +264,9 @@ Signal::INT.trap do
   Log.info { "Shutting down..." }
 
   # Stop the cluster coordinator
-  if provider = Session.config.provider
-    if store = provider.as?(Session::ClusteredRedisStore(UserSession))
-      store.shutdown
+  if store = Session.config.store
+    if clustered = store.as?(Session::ClusteredRedisStore(UserSession))
+      clustered.shutdown
     end
   end
 

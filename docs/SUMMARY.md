@@ -12,14 +12,6 @@
 * [Security Settings](configuration/security.md)
 * [Performance Settings](configuration/performance.md)
 
-## Architecture & Improvements
-
-* [Overview](architecture/overview.md)
-* [Phase 1: Code Quality](architecture/phase-1-code-quality.md)
-* [Phase 2: Developer Experience](architecture/phase-2-developer-experience.md)
-* [Phase 3: Store Consolidation](architecture/phase-3-store-consolidation.md)
-* [Phase 4: Provider Simplification](architecture/phase-4-provider-simplification.md)
-
 ## Storage Backends
 
 * [Overview](storage-backends/overview.md)
@@ -65,7 +57,6 @@
 
 ## API Reference
 
-* [Provider API](api/provider.md)
-* [Session API](api/session.md)
 * [Store API](api/store.md)
+* [Session API](api/session.md)
 * [Exceptions](api/exceptions.md)

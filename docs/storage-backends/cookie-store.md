@@ -17,7 +17,7 @@ flowchart LR
 ```crystal
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
-  config.provider = Session::CookieStore(UserSession).provider
+  config.store = Session::CookieStore(UserSession).new
 end
 ```
 

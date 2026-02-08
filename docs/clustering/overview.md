@@ -111,7 +111,7 @@ Session.configure do |config|
   config.cluster.local_cache_max_size = 10_000
 
   # Use clustered store
-  config.provider = Session::ClusteredRedisStore(UserSession).new(
+  config.store = Session::ClusteredRedisStore(UserSession).new(
     client: Redis.new(host: "redis.example.com")
   )
 end
