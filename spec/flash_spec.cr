@@ -191,6 +191,81 @@ describe Session::Flash do
     end
   end
 
+  describe "#has_key?" do
+    it "returns true when key exists in now" do
+      flash = Session::Flash.new
+      flash.now["notice"] = "Hello"
+
+      flash.has_key?("notice").should be_true
+    end
+
+    it "returns true when key exists in next" do
+      flash = Session::Flash.new
+      flash["alert"] = "Warning"
+
+      flash.has_key?("alert").should be_true
+    end
+
+    it "returns false when key does not exist" do
+      flash = Session::Flash.new
+
+      flash.has_key?("missing").should be_false
+    end
+  end
+
+  describe "#clear_now" do
+    it "clears current request messages" do
+      flash = Session::Flash.new
+      flash.now["notice"] = "Current"
+      flash.now["alert"] = "Also current"
+
+      flash.clear_now
+
+      flash.now.empty?.should be_true
+    end
+
+    it "does not affect next messages" do
+      flash = Session::Flash.new
+      flash.now["notice"] = "Current"
+      flash["alert"] = "Next"
+
+      flash.clear_now
+
+      flash.now.empty?.should be_true
+      flash.next["alert"].should eq "Next"
+    end
+  end
+
+  describe "keep across rotations" do
+    it "survives two rotations with keep" do
+      flash = Session::Flash.new
+      flash["notice"] = "Persistent"
+
+      # First rotation: next -> now
+      flash.rotate!
+      flash.now["notice"].should eq "Persistent"
+
+      # Keep it for another request
+      flash.keep("notice")
+
+      # Second rotation: next -> now again
+      flash.rotate!
+      flash.now["notice"].should eq "Persistent"
+    end
+
+    it "disappears after rotation without keep" do
+      flash = Session::Flash.new
+      flash["notice"] = "Ephemeral"
+
+      flash.rotate!
+      flash.now["notice"].should eq "Ephemeral"
+
+      # Don't keep, rotate again
+      flash.rotate!
+      flash.now["notice"]?.should be_nil
+    end
+  end
+
   describe "JSON serialization" do
     it "serializes and deserializes" do
       flash = Session::Flash.new

@@ -17,13 +17,12 @@ module Session
     getter session_id : String = UUID.random.to_s
     getter created_at : Time = Time.local
 
-    property expires_at : Time
-
-    abstract def authenticated? : Bool
+    property expires_at : Time = Session.config.timeout.from_now
 
     def initialize
-      @expires_at = timeout
     end
+
+    abstract def authenticated? : Bool
 
     def expired?
       Time.local > expires_at

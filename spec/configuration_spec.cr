@@ -89,4 +89,148 @@ describe Session::Configuration do
       config.half_open_max_calls.should eq 1
     end
   end
+
+  describe "#session" do
+    it "returns configured store" do
+      store = Session::MemoryStore(UserSession).new
+      Session.config.store = store
+
+      Session.config.session.should eq store
+    end
+
+    it "raises when store is not configured" do
+      Session.config.store = nil
+
+      expect_raises(Exception, "Session store not configured") do
+        Session.config.session
+      end
+    end
+  end
+
+  describe "#encryptor" do
+    it "returns a Message::Encryptor" do
+      Session.config.encryptor.should be_a Message::Encryptor
+    end
+
+    it "raises InsecureSecretException when require_secure_secret and using default" do
+      Session.config.require_secure_secret = true
+
+      expect_raises(Session::InsecureSecretException) do
+        Session.config.encryptor
+      end
+    end
+
+    it "passes KDF settings to encryptor" do
+      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.use_kdf = true
+      Session.config.kdf_iterations = 50_000
+
+      encryptor = Session.config.encryptor
+      encryptor.should be_a Message::Encryptor
+    end
+  end
+
+  describe "lifecycle callbacks" do
+    it "fires on_started when session is created" do
+      fired = false
+      received_sid = ""
+      Session.config.on_started = ->(sid : String, _data : Session::Base) {
+        fired = true
+        received_sid = sid
+        nil
+      }
+
+      store = Session::MemoryStore(UserSession).new
+      store.create
+
+      fired.should be_true
+      received_sid.should eq store.session_id
+    end
+
+    it "fires on_deleted when session is deleted" do
+      fired = false
+      Session.config.on_deleted = ->(_sid : String, _data : Session::Base) {
+        fired = true
+        nil
+      }
+
+      store = Session::MemoryStore(UserSession).new
+      store.create
+      cookies = HTTP::Cookies.new
+      store.set_cookies(cookies)
+
+      store.delete
+
+      fired.should be_true
+    end
+
+    it "fires on_loaded when session is loaded" do
+      fired = false
+      Session.config.on_loaded = ->(_sid : String, _data : Session::Base) {
+        fired = true
+        nil
+      }
+
+      store = Session::MemoryStore(UserSession).new
+      store.create
+      cookies = HTTP::Cookies.new
+      cookies << store.create_session_cookie("localhost")
+      store.set_cookies(cookies)
+
+      store.load_from(cookies)
+
+      fired.should be_true
+    end
+
+    it "fires on_client when cookies are set" do
+      fired = false
+      Session.config.on_client = ->(_sid : String, _data : Session::Base) {
+        fired = true
+        nil
+      }
+
+      store = Session::MemoryStore(UserSession).new
+      store.create
+      cookies = HTTP::Cookies.new
+      store.set_cookies(cookies)
+
+      fired.should be_true
+    end
+
+    it "fires on_regenerated when session ID is regenerated" do
+      old_id = ""
+      new_id = ""
+      Session.config.on_regenerated = ->(old_sid : String, new_sid : String, _data : Session::Base) {
+        old_id = old_sid
+        new_id = new_sid
+        nil
+      }
+
+      store = Session::MemoryStore(UserSession).new
+      store.create
+      original_id = store.session_id
+      cookies = HTTP::Cookies.new
+      store.set_cookies(cookies)
+
+      store.regenerate_id
+
+      old_id.should eq original_id
+      new_id.should eq store.session_id
+      old_id.should_not eq new_id
+    end
+  end
+
+  describe "error handling configuration" do
+    it "defaults fail_fast_on_corruption to true" do
+      Session.config.fail_fast_on_corruption.should be_true
+    end
+
+    it "defaults enable_retry to true" do
+      Session.config.enable_retry.should be_true
+    end
+
+    it "defaults log_errors to true" do
+      Session.config.log_errors.should be_true
+    end
+  end
 end
