@@ -43,7 +43,7 @@ if REDIS_AVAILABLE
       it "handles deserialization errors gracefully" do
         # Store valid JSON but invalid session data structure
         # This will fail during JSON parsing due to missing required fields
-        invalid_data = %({"invalid": "data"})
+        invalid_data = %({"session_id": 12345})
         client.setex("session:#{key}", 3600, invalid_data)
 
         expect_raises(Session::SessionCorruptionException, "Invalid JSON in session data") do
