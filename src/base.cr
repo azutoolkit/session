@@ -1,17 +1,21 @@
 module Session
-  # Abstract base class for session data
+  # Base class for session data
   #
   # Subclass this to define your session's data structure.
-  # The subclass must implement `authenticated?` and provide a parameterless constructor.
+  # Override `authenticated?` to reflect your authentication logic.
   #
   # Example:
   #   ```
   # class UserSession < Session::Base
   #   property? authenticated : Bool = false
   #   property username : String? = nil
+  #
+  #   def authenticated? : Bool
+  #     @authenticated
+  #   end
   # end
   #   ```
-  abstract class Base
+  class Base
     include JSON::Serializable
 
     getter session_id : String = UUID.random.to_s
@@ -22,7 +26,9 @@ module Session
     def initialize
     end
 
-    abstract def authenticated? : Bool
+    def authenticated? : Bool
+      false
+    end
 
     def expired?
       Time.local > expires_at

@@ -91,8 +91,6 @@ module Session
       Log.debug { "Session regenerated - OldId: #{old_sid} NewId: #{new_sid} Data: #{data}" }
     end
 
-    property store = nil
-
     # Retry configuration for resilient operations
     property retry_config : RetryConfig = RetryConfig.new(
       max_attempts: 3,
@@ -157,7 +155,7 @@ module Session
     end
 
     def session
-      store || raise "Session store not configured"
+      raise "Session store not configured. Call Session.use_store(StoreType) before Session.configure."
     end
 
     def encryptor

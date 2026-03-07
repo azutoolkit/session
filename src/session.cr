@@ -105,6 +105,29 @@ module Session
 
   CONFIG = Configuration.new
 
+  # Injects a typed `store` property into `Session::Configuration` for the given store type.
+  #
+  # Crystal's invariant generics mean `CookieStore(UserSession)` cannot be assigned to
+  # `Store(Base)?`. Calling `use_store` reopens `Configuration` in the library's own
+  # namespace so that the property carries the exact concrete type, keeping your
+  # application code free of class-reopen boilerplate.
+  #
+  # Call this **before** `Session.configure`:
+  #
+  # ```crystal
+  # Session.use_store(Session::CookieStore(UserSession))
+  #
+  # Session.configure do |c|
+  #   c.secret = ENV["SESSION_SECRET"]
+  #   c.store  = Session::CookieStore(UserSession).new
+  # end
+  # ```
+  macro use_store(store_type)
+    class Session::Configuration
+      property store : {{store_type}}? = nil
+    end
+  end
+
   def self.configure(&)
     with CONFIG yield CONFIG
   end
