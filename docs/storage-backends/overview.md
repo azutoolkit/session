@@ -38,6 +38,8 @@ graph TD
 ### Cookie Store
 
 ```crystal
+Session.use_store(Session::CookieStore(UserSession))
+# then inside Session.configure:
 config.store = Session::CookieStore(UserSession).new
 ```
 
@@ -49,6 +51,8 @@ config.store = Session::CookieStore(UserSession).new
 ### Memory Store
 
 ```crystal
+Session.use_store(Session::MemoryStore(UserSession))
+# then inside Session.configure:
 config.store = Session::MemoryStore(UserSession).new
 ```
 
@@ -60,9 +64,9 @@ config.store = Session::MemoryStore(UserSession).new
 ### Redis Store
 
 ```crystal
-config.store = Session::RedisStore(UserSession).new(
-  client: Redis.new
-)
+Session.use_store(Session::RedisStore(UserSession))
+# then inside Session.configure:
+config.store = Session::RedisStore(UserSession).new(client: Redis.new)
 ```
 
 **Use when:**
@@ -73,10 +77,10 @@ config.store = Session::RedisStore(UserSession).new(
 ### Clustered Redis Store
 
 ```crystal
+Session.use_store(Session::ClusteredRedisStore(UserSession))
+# then inside Session.configure:
 config.cluster.enabled = true
-config.store = Session::ClusteredRedisStore(UserSession).new(
-  client: Redis.new
-)
+config.store = Session::ClusteredRedisStore(UserSession).new(client: Redis.new)
 ```
 
 **Use when:**

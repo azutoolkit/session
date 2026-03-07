@@ -13,7 +13,7 @@ class UserSession < Session::Base
 end
 ```
 
-The `authenticated?` method is abstract in `Session::Base` and must be implemented. Using `property?` is the simplest approach, but you can also define it manually:
+`Session::Base` provides a default `authenticated?` that returns `false`. Override it with your own logic:
 
 ```crystal
 class UserSession < Session::Base

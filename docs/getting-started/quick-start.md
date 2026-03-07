@@ -28,9 +28,13 @@ end
 
 ## Step 2: Configure Session
 
-Set up the session configuration:
+Declare the store type with `Session.use_store`, then configure:
 
 ```crystal
+# Tell the library which concrete store type you'll use.
+# This must be called before Session.configure.
+Session.use_store(Session::MemoryStore(UserSession))
+
 Session.configure do |config|
   # Required: Secret key for encryption (use environment variable in production)
   config.secret = ENV["SESSION_SECRET"]? || "your-32-character-secret-key-here"
@@ -41,17 +45,22 @@ Session.configure do |config|
   # Cookie name
   config.session_key = "myapp_session"
 
-  # Choose a storage backend
+  # Assign a store instance matching the type declared above
   config.store = Session::MemoryStore(UserSession).new
 end
 ```
+
+> **Why `use_store`?** Crystal's generic type system is invariant: a
+> `MemoryStore(UserSession)` cannot be assigned to `Store(Base)?`. `use_store`
+> injects a typed `store` property into `Configuration` so the compiler knows
+> the exact type.
 
 ## Step 3: Use Sessions
 
 ### Create a Session
 
 ```crystal
-store = Session.config.store.not_nil!
+store = Session.config.store!
 
 # Create a new session
 session = store.create
@@ -100,13 +109,15 @@ Integrate with an HTTP server:
 require "http/server"
 require "session"
 
-# Configure session
+# Declare store type, then configure
+Session.use_store(Session::MemoryStore(UserSession))
+
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
   config.store = Session::MemoryStore(UserSession).new
 end
 
-store = Session.config.store.not_nil!
+store = Session.config.store!
 
 # Create server with session handler
 server = HTTP::Server.new([
@@ -175,7 +186,9 @@ class UserSession < Session::Base
   end
 end
 
-# Configure
+# Declare store type, then configure
+Session.use_store(Session::MemoryStore(UserSession))
+
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]? || "dev-secret-32-characters-long!!"
   config.timeout = 1.hour
@@ -183,7 +196,7 @@ Session.configure do |config|
   config.store = Session::MemoryStore(UserSession).new
 end
 
-store = Session.config.store.not_nil!
+store = Session.config.store!
 
 # Server
 server = HTTP::Server.new([

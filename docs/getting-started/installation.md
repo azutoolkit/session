@@ -36,12 +36,14 @@ class TestSession < Session::Base
   property test : String = "Hello"
 end
 
+Session.use_store(Session::MemoryStore(TestSession))
+
 Session.configure do |config|
   config.secret = "test-secret-for-verification"
   config.store = Session::MemoryStore(TestSession).new
 end
 
-store = Session.config.store.not_nil!
+store = Session.config.store!
 session = store.create
 puts "Session ID: #{session.session_id}"
 puts "Installation successful!"
