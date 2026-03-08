@@ -125,6 +125,10 @@ module Session
   macro use_store(store_type)
     class Session::Configuration
       property store : {{store_type}}? = nil
+
+      def session : {{store_type}}
+        @store || raise "Session store not configured. Call Session.configure and set c.store before using Session.session."
+      end
     end
   end
 

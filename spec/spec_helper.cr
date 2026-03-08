@@ -22,12 +22,7 @@ class UserSession < Session::Base
   property username : String? = "example"
 end
 
-# Crystal 1.19+ needs a concrete type for @store since the library
-# declares `property store = nil` (no type annotation).
-# Provide the type so specs compile.
-class Session::Configuration
-  @store : Session::MemoryStore(UserSession)? = nil
-end
+Session.use_store(Session::MemoryStore(UserSession))
 
 # Reset configuration to defaults before each test
 def reset_config
