@@ -114,12 +114,12 @@ module Session
   #
   # Call this **before** `Session.configure`:
   #
-  # ```crystal
+  # ```
   # Session.use_store(Session::CookieStore(UserSession))
   #
   # Session.configure do |c|
   #   c.secret = ENV["SESSION_SECRET"]
-  #   c.store  = Session::CookieStore(UserSession).new
+  #   c.store = Session::CookieStore(UserSession).new
   # end
   # ```
   macro use_store(store_type)
