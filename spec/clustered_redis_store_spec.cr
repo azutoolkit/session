@@ -489,10 +489,8 @@ if REDIS_AVAILABLE
         # Clear from node 1
         store1.clear
 
-        sleep(150.milliseconds)
-
         # Node 2's cache should be cleared
-        store2.coordinator.local_cache.size.should eq 0
+        eventually { store2.coordinator.local_cache.size == 0 }.should be_true
 
         store1.shutdown
         store2.shutdown
