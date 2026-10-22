@@ -5,7 +5,6 @@ module Session
   class RedisStore(T) < Store(T)
     include QueryableStore(T)
     getter circuit_breaker : CircuitBreaker?
-    property current_session : T = T.new
 
     @client : Redis?
     @pool : ConnectionPool?

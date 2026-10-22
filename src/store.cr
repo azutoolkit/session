@@ -22,10 +22,21 @@ module Session
     # Storage abstraction - must be implemented by subclasses
     abstract def storage : String
 
-    # Current session must be provided by subclasses
-    # Typically implemented as: property current_session : T = T.new
-    abstract def current_session : T
-    abstract def current_session=(current_session : T)
+    # The session of the request being served. A store is shared by every request, so it is
+    # kept per fiber: concurrent requests, and the next request on a keep-alive connection,
+    # never see each other's session. `SessionHandler` calls `release` when a request ends.
+    def current_session : T
+      @mutex.synchronize { @current_sessions[Fiber.current] ||= T.new }
+    end
+
+    def current_session=(current_session : T)
+      @mutex.synchronize { @current_sessions[Fiber.current] = current_session }
+    end
+
+    # Forget the current fiber's session once its request is done.
+    def release : Nil
+      @mutex.synchronize { @current_sessions.delete(Fiber.current) }
+    end
 
     # Core store operations
     abstract def [](key : String) : T
@@ -37,6 +48,7 @@ module Session
 
     # Instance variables for session lifecycle
     @mutex : Mutex = Mutex.new
+    @current_sessions = {} of Fiber => T
     @flash : Flash = Flash.new
 
     # Access flash messages
