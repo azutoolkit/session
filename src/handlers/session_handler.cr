@@ -9,6 +9,8 @@ module Session
       load_session(context)
       call_next(context)
       save_session(context)
+    ensure
+      @session.release
     end
 
     private def load_session(context : HTTP::Server::Context)
