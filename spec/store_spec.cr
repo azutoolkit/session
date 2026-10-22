@@ -227,3 +227,20 @@ if REDIS_AVAILABLE
     end
   end
 end
+
+describe Session::Store do
+  describe "#authenticate" do
+    it "applies the change and moves the session to a new id, so the old one stops working" do
+      store = Session::MemoryStore(UserSession).new
+      store.create
+      before = store.session_id
+
+      store.authenticate { |session| session.username = "alice" }
+
+      store.session_id.should_not eq before
+      store.current_session.username.should eq "alice"
+      store[store.session_id].username.should eq "alice"
+      store[before]?.should be_nil
+    end
+  end
+end

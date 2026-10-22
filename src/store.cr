@@ -106,6 +106,18 @@ module Session
       current_session
     end
 
+    # Change the session's privileges (log in, switch user, elevate) and give it a new id in
+    # one step. Re-using the id a visitor had before logging in lets anyone who planted or
+    # observed it (session fixation) share the authenticated session.
+    #
+    # ```
+    # store.authenticate { |session| session.user_id = user.id }
+    # ```
+    def authenticate(& : T -> _) : T
+      yield current_session
+      regenerate_id
+    end
+
     def create : T
       self.current_session = T.new
       self[session_id] = current_session
