@@ -73,11 +73,14 @@ describe Session::Store do
       store.flash.should be_a Session::Flash
     end
 
-    it "rotates flash on load" do
+    it "rotates the flash of the session it loads" do
       store = Session::MemoryStore(UserSession).new
-      store.flash["notice"] = "Hello"
+      session = UserSession.new
+      session.flash["notice"] = "Hello"
+      store[session.session_id] = session
 
       cookies = HTTP::Cookies.new
+      cookies << HTTP::Cookie.new(name: store.session_key, value: session.session_id)
       store.load_from(cookies)
 
       store.flash.now["notice"].should eq "Hello"
