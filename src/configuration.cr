@@ -78,6 +78,10 @@ module Session
     property bind_to_ip : Bool = false
     property bind_to_user_agent : Bool = false
 
+    # Whether `X-Forwarded-For` and `X-Real-IP` name the client for IP binding. Any client can
+    # send them, so they are believed only when a trusted proxy in front of the app sets them.
+    property trust_proxy_headers : Bool = false
+
     # Track if secret warning has been logged to avoid spamming
     @secret_warning_logged : Bool = false
     property on_started : Proc(String, Session::Base, Nil) = ->(sid : String, data : Session::Base) do

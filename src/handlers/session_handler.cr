@@ -55,16 +55,16 @@ module Session
       Log.warn { "Failed to clear corrupted session: #{ex.message}" }
     end
 
+    # A session is tied to the client it was first used from: a request from a different
+    # client is refused (and answered with a fresh session by `load_session`'s rescue).
     private def validate_session_binding(request : HTTP::Request)
-      # Get stored fingerprint from session data if available
-      # Note: This requires the session data type to have a client_fingerprint property
-      # For now, we create a new fingerprint and validate against request
-      # In a full implementation, the fingerprint would be stored in the session
-      _fingerprint = ClientFingerprint.from_request(request)
+      session = @session.current_session
 
-      # If session has a stored fingerprint, validate it
-      # This is a simplified implementation - in practice you'd store the fingerprint
-      # in the session data when the session is created
+      if fingerprint = session.client_fingerprint
+        fingerprint.validate!(request)
+      else
+        session.client_fingerprint = ClientFingerprint.from_request(request)
+      end
     end
 
     private def generate_session_id
