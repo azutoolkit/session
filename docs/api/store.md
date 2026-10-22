@@ -9,8 +9,9 @@ Subclasses must implement:
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `storage` | `: String` | Backend name (e.g., `"memory"`, `"redis"`) |
-| `current_session` | `: T` | Get current session |
-| `current_session=` | `(T)` | Set current session |
+| `current_session` | `: T` | Get the current request's session (kept per fiber) |
+| `current_session=` | `(T)` | Set the current request's session |
+| `release` | `: Nil` | Forget the current fiber's session; `SessionHandler` calls it when a request ends |
 | `[]` | `(key : String) : T` | Fetch session by ID (raises `SessionNotFoundException`) |
 | `[]?` | `(key : String) : T?` | Fetch session by ID (returns `nil`) |
 | `[]=` | `(key : String, session : T) : T` | Store a session |

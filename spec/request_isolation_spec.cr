@@ -36,7 +36,9 @@ describe "request isolation" do
     anonymous = request_with(nil)
     handler.call(anonymous)
 
-    anonymous.response.cookies[Session.config.session_key]?.try(&.value).should_not eq owner.session_id
+    cookie = anonymous.response.cookies[Session.config.session_key]?
+    cookie.should_not be_nil
+    cookie.try(&.value).should_not eq owner.session_id
   end
 
   it "keeps concurrent requests on their own sessions" do
@@ -63,5 +65,33 @@ describe "request isolation" do
     2.times { done.receive }
 
     probe.seen.sort.should eq [alice.session_id, bob.session_id].sort
+  end
+
+  it "releases the request's session when the request ends, even when it raises" do
+    reset_config
+    store = Session::MemoryStore(UserSession).new
+    Session.config.store = store
+
+    handler = Session::SessionHandler(UserSession).new(store)
+    handler.next = ->(_context : HTTP::Server::Context) do
+      store.current_session
+      raise "boom"
+    end
+
+    expect_raises(Exception, "boom") { handler.call(request_with(nil)) }
+    store.@current_sessions.should be_empty
+  end
+
+  it "does not keep sessions of fibers that have finished" do
+    reset_config
+    store = Session::MemoryStore(UserSession).new
+
+    done = Channel(Nil).new
+    50.times { spawn { store.current_session; done.send(nil) } }
+    50.times { done.receive }
+    Fiber.yield
+
+    store.current_session
+    store.@current_sessions.size.should be < 5
   end
 end

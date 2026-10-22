@@ -25,12 +25,20 @@ module Session
     # The session of the request being served. A store is shared by every request, so it is
     # kept per fiber: concurrent requests, and the next request on a keep-alive connection,
     # never see each other's session. `SessionHandler` calls `release` when a request ends.
+    #
+    # A fiber spawned during a request starts with a blank session; capture the session
+    # before `spawn` to use it there.
     def current_session : T
-      @mutex.synchronize { @current_sessions[Fiber.current] ||= T.new }
+      @mutex.synchronize { @current_sessions[Fiber.current]? || remember(T.new) }
     end
 
     def current_session=(current_session : T)
-      @mutex.synchronize { @current_sessions[Fiber.current] = current_session }
+      @mutex.synchronize { remember(current_session) }
+    end
+
+    private def remember(session : T) : T
+      @current_sessions.reject! { |fiber, _| fiber.dead? }
+      @current_sessions[Fiber.current] = session
     end
 
     # Forget the current fiber's session once its request is done.
