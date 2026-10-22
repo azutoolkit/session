@@ -3,9 +3,32 @@ require "../store"
 module Session
   class CookieStore(T) < Store(T)
     include Enumerable(HTTP::Cookie)
-    property cookies : HTTP::Cookies = HTTP::Cookies.new
 
-    def initialize(@cookies : HTTP::Cookies = HTTP::Cookies.new)
+    # The cookies of the request being served. The session lives in them, and a store is shared
+    # by every request, so they are kept per fiber, like the current session: another request
+    # must never see (or overwrite) them. `release` forgets them when the request ends.
+    @request_cookies = {} of Fiber => HTTP::Cookies
+
+    def initialize(cookies : HTTP::Cookies = HTTP::Cookies.new)
+      self.cookies = cookies
+    end
+
+    def cookies : HTTP::Cookies
+      @mutex.synchronize { @request_cookies[Fiber.current] ||= remember_cookies(HTTP::Cookies.new) }
+    end
+
+    def cookies=(cookies : HTTP::Cookies) : HTTP::Cookies
+      @mutex.synchronize { remember_cookies(cookies) }
+    end
+
+    def release : Nil
+      super
+      @mutex.synchronize { @request_cookies.delete(Fiber.current) }
+    end
+
+    private def remember_cookies(cookies : HTTP::Cookies) : HTTP::Cookies
+      @request_cookies.reject! { |fiber, _| fiber.dead? }
+      @request_cookies[Fiber.current] = cookies
     end
 
     def each(&block : HTTP::Cookie -> _)

@@ -27,6 +27,9 @@ module Session
     # and reach only the visitor they were meant for.
     getter flash : Flash = Flash.new
 
+    # The client the session was first used from, when session binding is enabled.
+    property client_fingerprint : ClientFingerprint? = nil
+
     def initialize
     end
 

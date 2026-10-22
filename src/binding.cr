@@ -57,21 +57,20 @@ module Session
       @ip_hash.nil? && @user_agent_hash.nil?
     end
 
-    # Extract client IP from request, considering proxy headers
+    # The client's address: the peer of the connection, or, behind a trusted proxy
+    # (`trust_proxy_headers`), the one the proxy reports.
     protected def self.extract_client_ip(request : HTTP::Request) : String?
-      # Check X-Forwarded-For first (for proxied requests)
-      if forwarded = request.headers["X-Forwarded-For"]?
-        # Take the first IP (original client)
-        return forwarded.split(",").first.strip
+      if Session.config.trust_proxy_headers
+        if forwarded = request.headers["X-Forwarded-For"]?
+          return forwarded.split(",").first.strip
+        end
+
+        if real_ip = request.headers["X-Real-IP"]?
+          return real_ip.strip
+        end
       end
 
-      # Check X-Real-IP
-      if real_ip = request.headers["X-Real-IP"]?
-        return real_ip.strip
-      end
-
-      # Fall back to remote address (may not be available in all contexts)
-      nil
+      request.remote_address.try(&.as?(Socket::IPAddress)).try(&.address)
     end
 
     private def hash_value(value : String) : String

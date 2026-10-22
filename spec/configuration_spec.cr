@@ -234,3 +234,47 @@ describe Session::Configuration do
     end
   end
 end
+
+describe Session::Configuration do
+  describe "the default secret outside development" do
+    around_each do |example|
+      previous = ENV["CRYSTAL_ENV"]?
+      example.run
+      previous ? (ENV["CRYSTAL_ENV"] = previous) : ENV.delete("CRYSTAL_ENV")
+    end
+
+    {"production", "staging"}.each do |environment|
+      it "is refused in #{environment}" do
+        ENV["CRYSTAL_ENV"] = environment
+        config = Session::Configuration.new
+
+        config.require_secure_secret.should be_true
+        expect_raises(Session::InsecureSecretException) { config.validate_secret! }
+      end
+    end
+
+    it "is only warned about in development" do
+      ENV["CRYSTAL_ENV"] = "development"
+      config = Session::Configuration.new
+
+      config.require_secure_secret.should be_false
+      config.validate_secret!
+    end
+
+    it "can still be switched off explicitly" do
+      ENV["CRYSTAL_ENV"] = "production"
+      config = Session::Configuration.new
+      config.require_secure_secret = false
+
+      config.validate_secret!
+    end
+
+    it "does not get in the way of a real secret in production" do
+      ENV["CRYSTAL_ENV"] = "production"
+      config = Session::Configuration.new
+      config.secret = "a-secret-nobody-else-knows-0123456789"
+
+      config.validate_secret!
+    end
+  end
+end

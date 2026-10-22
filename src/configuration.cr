@@ -32,8 +32,13 @@ module Session
     # Cluster configuration for multi-node deployments with Redis Pub/Sub
     property cluster : ClusterConfig = ClusterConfig.new
 
-    # Security: require a secure secret (non-default) - raises if default secret is used
-    property require_secure_secret : Bool = false
+    # Environments that must not run on the published default secret.
+    PRODUCTION_ENVIRONMENTS = %w(production staging)
+
+    # Security: require a secure secret (non-default) - raises if default secret is used.
+    # The default secret is public, so anyone could forge a session cookie signed with it:
+    # it is refused in production and staging (`CRYSTAL_ENV`) unless turned off explicitly.
+    property require_secure_secret : Bool = PRODUCTION_ENVIRONMENTS.includes?(ENV["CRYSTAL_ENV"]?)
 
     # Digest algorithm for HMAC signatures (:sha256 recommended, :sha1 for legacy)
     property digest_algorithm : Symbol = :sha256
@@ -72,6 +77,10 @@ module Session
     # Session binding: bind sessions to client fingerprint for security
     property bind_to_ip : Bool = false
     property bind_to_user_agent : Bool = false
+
+    # Whether `X-Forwarded-For` and `X-Real-IP` name the client for IP binding. Any client can
+    # send them, so they are believed only when a trusted proxy in front of the app sets them.
+    property trust_proxy_headers : Bool = false
 
     # Track if secret warning has been logged to avoid spamming
     @secret_warning_logged : Bool = false

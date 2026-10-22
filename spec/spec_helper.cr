@@ -47,3 +47,14 @@ end
 Spec.before_each do
   reset_config
 end
+
+# Waits for something that happens in another fiber, such as a Pub/Sub message, to become true.
+# Returns as soon as it does (so the usual case is faster than a fixed sleep) and gives up after
+# `timeout` (so a loaded machine does not make the spec fail), returning the last answer.
+def eventually(timeout : Time::Span = 3.seconds, & : -> Bool) : Bool
+  deadline = Time.instant + timeout
+  until (result = yield) || Time.instant >= deadline
+    sleep 10.milliseconds
+  end
+  result
+end

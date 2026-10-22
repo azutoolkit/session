@@ -1,6 +1,11 @@
 require "./spec_helper"
 
 describe Session::ClientFingerprint do
+  # These examples describe a deployment behind a trusted proxy that names the client in
+  # X-Forwarded-For / X-Real-IP; client_binding_spec covers the default, which ignores them.
+  before_each { Session.config.trust_proxy_headers = true }
+  after_each { Session.config.trust_proxy_headers = false }
+
   describe ".binding_enabled?" do
     it "returns false when both bindings disabled" do
       Session.config.bind_to_ip = false
