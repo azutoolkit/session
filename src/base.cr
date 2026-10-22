@@ -23,6 +23,10 @@ module Session
 
     property expires_at : Time = Session.config.timeout.from_now
 
+    # Messages for the next request. They belong to the session, so they are saved with it
+    # and reach only the visitor they were meant for.
+    getter flash : Flash = Flash.new
+
     def initialize
     end
 

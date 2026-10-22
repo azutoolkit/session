@@ -57,11 +57,10 @@ module Session
     # Instance variables for session lifecycle
     @mutex : Mutex = Mutex.new
     @current_sessions = {} of Fiber => T
-    @flash : Flash = Flash.new
 
-    # Access flash messages
+    # The current request's flash messages (those of its session).
     def flash : Flash
-      @flash
+      current_session.flash
     end
 
     def session_id : String
@@ -116,9 +115,6 @@ module Session
     end
 
     def load_from(request_cookies : HTTP::Cookies) : T?
-      # Rotate flash messages at the start of each request
-      @flash.rotate!
-
       if self.is_a?(CookieStore(T))
         self.as(CookieStore(T)).cookies = request_cookies
       end
@@ -131,6 +127,9 @@ module Session
           if Session.config.sliding_expiration
             current_session.touch
           end
+
+          # Messages set by the previous request become this request's
+          current_session.flash.rotate!
 
           on(:loaded, session_id, current_session)
         end
