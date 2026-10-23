@@ -29,6 +29,8 @@ end
 ### 2. Configure Session
 
 ```crystal
+Session.use_store(Session::MemoryStore(UserSession))
+
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
   config.timeout = 24.hours
@@ -44,12 +46,10 @@ Session provides a ready-to-use `SessionHandler`:
 ```crystal
 require "http/server"
 
-store = Session.config.store.not_nil!
-
 server = HTTP::Server.new([
-  Session::SessionHandler.new(store),
-  MyAppHandler.new,
-])
+  Session::SessionHandler.new(Session.session),
+  HTTP::StaticFileHandler.new("public"),
+] of HTTP::Handler)
 
 server.listen(8080)
 puts "Server listening on http://localhost:8080"
@@ -77,11 +77,12 @@ class MyAppHandler
   end
 
   private def handle_login(context, store)
-    # Create or regenerate session
-    store.regenerate_id
-    store.current_session.user_id = 1
-    store.current_session.username = "alice"
-    store.current_session.role = "admin"
+    # Change the session's privileges and give it a new id (against session fixation)
+    store.authenticate do |session|
+      session.user_id = 1
+      session.username = "alice"
+      session.role = "admin"
+    end
 
     store.flash["notice"] = "Welcome back!"
 
@@ -116,47 +117,16 @@ class MyAppHandler
 end
 ```
 
-## Custom Session Handler
+## How the Handler Works
 
-If you need custom behavior, implement your own handler:
+`Session::SessionHandler` does everything a request needs, so there is rarely a reason to write your own:
 
-```crystal
-class CustomSessionHandler
-  include HTTP::Handler
+1. It loads the session from the request cookies (`store.load_from`), validates the client binding, and starts a fresh session when the cookie is missing, expired, tampered with or bound to another client.
+2. It runs the rest of the handler chain.
+3. It saves the session (`store.set_cookies`) **just before the first byte of the response is written**, so the `Set-Cookie` headers go out even with a large, flushed or streamed body.
+4. It forgets the request's session (`store.release`), so concurrent requests never share one.
 
-  def initialize(@store : Session::MemoryStore(UserSession))
-  end
-
-  def call(context : HTTP::Server::Context)
-    # Load session from request cookies
-    @store.load_from(context.request.cookies)
-
-    begin
-      call_next(context)
-    ensure
-      # Always set session cookie in response
-      @store.set_cookies(context.response.cookies)
-    end
-  rescue Session::SessionExpiredException
-    handle_expired_session(context)
-  rescue Session::SessionCorruptionException
-    handle_corrupted_session(context)
-  end
-
-  private def handle_expired_session(context)
-    @store.create
-    call_next(context)
-    @store.set_cookies(context.response.cookies)
-  end
-
-  private def handle_corrupted_session(context)
-    @store.create
-    @store.flash["error"] = "Your session was invalid. Please log in again."
-    call_next(context)
-    @store.set_cookies(context.response.cookies)
-  end
-end
-```
+The current session is kept per fiber. A fiber you `spawn` during a request starts with a blank session: read what you need from `store.current_session` before spawning.
 
 ## Complete Example
 
@@ -241,7 +211,7 @@ end
 server = HTTP::Server.new([
   Session::SessionHandler.new(store),
   AppHandler.new,
-])
+] of HTTP::Handler)
 
 address = server.bind_tcp(8080)
 puts "Listening on http://#{address}"
@@ -281,13 +251,16 @@ end
 Place the session handler early in the chain, after request tracking but before your application logic:
 
 ```crystal
-store = Session.config.store.not_nil!
+Session.use_store(Session::MemoryStore(UserSession))
+Session.configure { |config| config.store = Session::MemoryStore(UserSession).new }
+
+store = Session.session
 
 server = HTTP::Server.new([
   HTTP::LogHandler.new,                       # 1. Logging
   HTTP::ErrorHandler.new,                     # 2. Error handling
   Session::SessionHandler.new(store),         # 3. Session management
-  AuthHandler.new,                            # 4. Authentication
-  AppHandler.new,                             # 5. Application
-])
+  Session::AuthenticationHandler(UserSession).new(store, "/login", /^\/(login|assets)/), # 4. Authentication
+  HTTP::StaticFileHandler.new("public"),      # 5. Application
+] of HTTP::Handler)
 ```

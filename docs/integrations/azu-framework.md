@@ -1,453 +1,146 @@
-# AZU Framework Integration
+# Azu Integration
 
-Integrate Session with the [AZU web framework](https://github.com/azutoolkit/azu) for type-safe session management in your Crystal applications.
-
-## Overview
+`require "session/azu"` is the opt-in integration with the [Azu web framework](https://github.com/azutoolkit/azu), or any `HTTP::Server` application. It needs no dependency on Azu: it adds a typed `session` and `flash` to `HTTP::Server::Context`, which every Azu endpoint has at hand.
 
 ```mermaid
 flowchart LR
-    Request["HTTP Request"] --> Handler["SessionHandler"]
-    Handler --> Endpoint["AZU Endpoint"]
+    Request["HTTP Request"] --> Handler["Session::SessionHandler"]
+    Handler --> Endpoint["Azu endpoint"]
     Endpoint --> Handler
-    Handler --> Response["HTTP Response + Cookie"]
+    Handler --> Response["HTTP Response + Set-Cookie"]
 ```
 
-## Installation
+## What you get
 
-Add both dependencies to your `shard.yml`:
+| | |
+|---|---|
+| `Session::SessionHandler` | Loads the session per request, saves it just before the response starts, forgets it afterwards. Concurrent requests never share a session. |
+| `Session::Web.use_store(StoreType)` | `Session.use_store` plus the typed accessors below. |
+| `context.session` | The request's session, typed as your `Session::Base` subclass. |
+| `context.flash` | The request's `Session::Flash`: `flash["notice"] = "Saved"` is shown on the next request, once. |
+| `Session.session.authenticate { }` | Change privileges (log in) and get a new session id in one step. |
+| Cookie defaults | `HttpOnly`, `Secure`, `SameSite=Strict`; the cookie store signs and encrypts. |
 
-```yaml
-dependencies:
-  azu:
-    github: azutoolkit/azu
-  session:
-    github: azutoolkit/session
-```
+There is no database-backed store. The stores are `CookieStore`, `MemoryStore`, `RedisStore` and `ClusteredRedisStore`.
 
-## Quick Start
-
-### 1. Define Your Session Data
+## Setup
 
 ```crystal
-# src/sessions/user_session.cr
+require "session/azu"
+
 class UserSession < Session::Base
-  property user_id : Int64?
-  property username : String?
-  property email : String?
-  property roles : Array(String) = [] of String
-  property logged_in_at : Time?
+  property user_id : Int64? = nil
 
   def authenticated? : Bool
     !user_id.nil?
   end
-
-  def admin? : Bool
-    roles.includes?("admin")
-  end
 end
-```
 
-### 2. Configure Session
-
-```crystal
-# src/config/session.cr
-require "session"
+Session::Web.use_store(Session::CookieStore(UserSession))
 
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
-  config.timeout = 24.hours
+  config.timeout = 8.hours
   config.session_key = "myapp_session"
-  config.sliding_expiration = true
-
-  # Use Redis for production
-  if Azu.env.production?
-    config.store = Session::RedisStore(UserSession).new(
-      client: Redis.new(url: ENV["REDIS_URL"])
-    )
-  else
-    config.store = Session::MemoryStore(UserSession).new
-  end
-end
-```
-
-### 3. Create the Session Handler
-
-```crystal
-# src/handlers/session_handler.cr
-class AzuSessionHandler
-  include HTTP::Handler
-
-  def initialize(@store : Session::MemoryStore(UserSession))
-  end
-
-  def call(context : HTTP::Server::Context)
-    # Load session from cookies
-    @store.load_from(context.request.cookies)
-
-    # Store store in context for endpoint access
-    context.set("session_store", @store)
-
-    # Process request
-    call_next(context)
-
-    # Set session cookie in response
-    @store.set_cookies(context.response.cookies)
-  rescue Session::SessionExpiredException
-    # Handle expired session - create new one
-    @store.create
-    call_next(context)
-    @store.set_cookies(context.response.cookies)
-  rescue Session::SessionCorruptionException
-    # Handle corrupted session - create new one
-    @store.create
-    call_next(context)
-    @store.set_cookies(context.response.cookies)
-  end
-end
-```
-
-### 4. Register the Handler
-
-```crystal
-# src/app.cr
-require "azu"
-require "./config/session"
-require "./handlers/session_handler"
-
-Azu.configure do
-  port = ENV.fetch("PORT", "4000").to_i
-end
-
-store = Session.config.store.not_nil!
-
-Azu.start [
-  Azu::Handler::RequestId.new,
-  Azu::Handler::Rescuer.new,
-  AzuSessionHandler.new(store),  # Add session handler
-  Azu::Handler::Logger.new,
-]
-```
-
-### 5. Use Sessions in Endpoints
-
-```crystal
-# src/endpoints/login_endpoint.cr
-struct LoginEndpoint
-  include Azu::Endpoint(LoginRequest, LoginResponse)
-  post "/login"
-
-  def call : LoginResponse
-    # Get session store from context
-    store = context.get("session_store").as(Session::MemoryStore(UserSession))
-
-    # Authenticate user
-    user = authenticate(request.email, request.password)
-
-    if user
-      # Regenerate session ID after login (security best practice)
-      store.regenerate_id
-
-      # Set session data
-      store.current_session.user_id = user.id
-      store.current_session.username = user.username
-      store.current_session.email = user.email
-      store.current_session.roles = user.roles
-      store.current_session.logged_in_at = Time.utc
-
-      # Set flash message
-      store.flash["notice"] = "Welcome back, #{user.username}!"
-
-      LoginResponse.new(success: true, message: "Logged in successfully")
-    else
-      store.flash["error"] = "Invalid credentials"
-      LoginResponse.new(success: false, message: "Invalid email or password")
-    end
-  end
-
-  private def authenticate(email : String, password : String) : User?
-    # Your authentication logic
-  end
-end
-```
-
-## Helper Module
-
-Create a helper module to simplify session access in endpoints:
-
-```crystal
-# src/helpers/session_helper.cr
-module SessionHelper
-  def session_store : Session::MemoryStore(UserSession)
-    context.get("session_store").as(Session::MemoryStore(UserSession))
-  end
-
-  def current_session : UserSession
-    session_store.current_session
-  end
-
-  def flash : Session::Flash
-    session_store.flash
-  end
-
-  def authenticated? : Bool
-    current_session.authenticated?
-  end
-
-  def current_user_id : Int64?
-    current_session.user_id
-  end
-
-  def require_authentication! : Nil
-    unless authenticated?
-      raise Azu::Unauthorized.new("Authentication required")
-    end
-  end
-
-  def require_admin! : Nil
-    require_authentication!
-    unless current_session.admin?
-      raise Azu::Forbidden.new("Admin access required")
-    end
-  end
-end
-```
-
-Use the helper in your endpoints:
-
-```crystal
-struct ProfileEndpoint
-  include Azu::Endpoint(EmptyRequest, ProfileResponse)
-  include SessionHelper
-  get "/profile"
-
-  def call : ProfileResponse
-    require_authentication!
-
-    user = User.find(current_user_id)
-    ProfileResponse.new(user)
-  end
-end
-
-struct AdminDashboardEndpoint
-  include Azu::Endpoint(EmptyRequest, DashboardResponse)
-  include SessionHelper
-  get "/admin/dashboard"
-
-  def call : DashboardResponse
-    require_admin!
-
-    stats = AdminService.get_dashboard_stats
-    DashboardResponse.new(stats)
-  end
-end
-```
-
-## Logout Endpoint
-
-```crystal
-struct LogoutEndpoint
-  include Azu::Endpoint(EmptyRequest, LogoutResponse)
-  include SessionHelper
-  post "/logout"
-
-  def call : LogoutResponse
-    if authenticated?
-      username = current_session.username
-      session_store.delete  # Destroy session
-      flash["notice"] = "Goodbye, #{username}!"
-    end
-
-    LogoutResponse.new(success: true)
-  end
-end
-```
-
-## Flash Messages in Templates
-
-Access flash messages in your views:
-
-```crystal
-# src/endpoints/home_endpoint.cr
-struct HomeEndpoint
-  include Azu::Endpoint(EmptyRequest, HomeResponse)
-  include SessionHelper
-  get "/"
-
-  def call : HomeResponse
-    HomeResponse.new(
-      flash_notice: flash.now["notice"]?,
-      flash_error: flash.now["error"]?,
-      user: authenticated? ? current_session.username : nil
-    )
-  end
-end
-```
-
-```html
-<!-- src/templates/home.jinja -->
-{% if flash_notice %}
-  <div class="alert alert-success">{{ flash_notice }}</div>
-{% endif %}
-
-{% if flash_error %}
-  <div class="alert alert-danger">{{ flash_error }}</div>
-{% endif %}
-
-{% if user %}
-  <p>Welcome, {{ user }}!</p>
-{% else %}
-  <p>Please <a href="/login">log in</a>.</p>
-{% endif %}
-```
-
-## Production Configuration
-
-### With Redis and Clustering
-
-```crystal
-Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
-  config.timeout = 24.hours
-  config.session_key = "myapp_session"
-
-  # Security settings
-  config.use_kdf = true
-  config.kdf_iterations = 100_000
-  config.bind_to_ip = true
-  config.bind_to_user_agent = true
-  config.sliding_expiration = true
-
-  # Resilience
-  config.enable_retry = true
-  config.circuit_breaker_enabled = true
-
-  # Clustering for multi-node deployments
-  config.cluster.enabled = true
-  config.cluster.node_id = ENV["POD_NAME"]? || ENV["HOSTNAME"]? || UUID.random.to_s
-  config.cluster.local_cache_ttl = 30.seconds
-  config.cluster.local_cache_max_size = 10_000
-
-  config.store = Session::ClusteredRedisStore(UserSession).new(
-    client: Redis.new(url: ENV["REDIS_URL"])
-  )
-end
-```
-
-### With Cookie Store (Stateless)
-
-For serverless or edge deployments:
-
-```crystal
-Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
-  config.timeout = 24.hours
-  config.compress_data = true  # Keep cookies small
-
   config.store = Session::CookieStore(UserSession).new
 end
 ```
 
+`SESSION_SECRET` is required in production and staging (`CRYSTAL_ENV`): the published default secret is refused there, because anyone could forge a cookie signed with it. Generate one with `Random::Secure.hex(32)` and keep it in your process environment.
+
+## Mount the handler
+
+Put the handler before the endpoints, after the handlers that must see every request (request id, logging, error rescue):
+
+<!-- skip -->
+```crystal
+MyApp.start [
+  Azu::Handler::RequestId.new,
+  Session::SessionHandler(UserSession).new(Session.session),
+  # ... your other handlers
+]
+```
+
+## Use it in endpoints
+
+<!-- skip -->
+```crystal
+struct Sessions::CreateEndpoint
+  include Azu::Endpoint(Sessions::CreateRequest, Azu::Response::Empty)
+
+  post "/login"
+
+  def call : Azu::Response::Empty
+    unless user = User.authenticate(create_request.email, create_request.password)
+      context.flash["error"] = "Invalid email or password"
+      return redirect to: "/login", status: 303
+    end
+
+    # A new session id on every privilege change: a planted id is worthless (session fixation)
+    Session.session.authenticate { |session| session.user_id = user.id }
+    context.flash["notice"] = "Welcome back"
+    redirect to: "/account", status: 303
+  end
+end
+
+struct Sessions::DestroyEndpoint
+  include Azu::Endpoint(Sessions::DestroyRequest, Azu::Response::Empty)
+
+  delete "/logout"
+
+  def call : Azu::Response::Empty
+    Session.session.delete
+    redirect to: "/login", status: 303
+  end
+end
+```
+
+`context.session.user_id` reads the session inside any endpoint. Without `session/azu`, `Session.session.current_session` and `Session.session.flash` are the same objects.
+
+## Flash messages
+
+`flash["notice"] = "..."` stores the message for the next request. That request reads it with `context.flash.now["notice"]?`; the request after it no longer sees it. `flash.keep("notice")` carries it over once more, `flash.to_h` returns what a view shows.
+
+Pass them to your page explicitly:
+
+<!-- skip -->
+```crystal
+HomePage.new(messages: context.flash.to_h)
+```
+
+## Cookies
+
+```crystal
+Session.configure do |config|
+  config.cookie_secure = true                              # default; false only for plain http that is not localhost
+  config.cookie_same_site = HTTP::Cookie::SameSite::Strict # default; Lax if you sign in from links in other sites
+end
+```
+
+Browsers keep a `Secure` cookie over plain http on `localhost`, so development needs no change.
+
+Choose the store by how you must revoke sessions. The cookie store keeps the session in the browser: signing out clears the cookie, but a copy of it stays valid until it expires, and `authenticate` cannot invalidate the old copy. Use `RedisStore` (or the memory store on a single server) when a session must be revocable.
+
+## Things to know
+
+- The current session is kept per fiber. A fiber you `spawn` during a request starts with a blank one: read what you need before spawning.
+- The session is saved just before the first byte of the response is written. Changes made after that (while streaming) are not saved.
+- Static files that pass through the handler also rotate the flash. Mount the static handler before the session handler.
+- Azu's own `Azu::Helpers::Context#session` and `#flash` read unsigned `_session` and `_flash` cookies, not this shard's: pass the values to your templates as shown above.
+
 ## Testing
 
-### Test Helper
+The shard's own specs run a real `HTTP::Server` on an unused port and drive it with `HTTP::Client` and a cookie jar (`spec/web_spec.cr`): login, flash shown once, id regeneration, tampered cookies and concurrent visitors. The same approach works for your application.
 
+<!-- skip -->
 ```crystal
-# spec/support/session_helper.cr
-def with_session(data : UserSession? = nil, &)
-  store = Session::MemoryStore(UserSession).new
-  store.create
+server = HTTP::Server.new([Session::SessionHandler.new(Session.session), app_handler] of HTTP::Handler)
+address = server.bind_unused_port
+spawn { server.listen }
 
-  if data
-    store.current_session.user_id = data.user_id
-    store.current_session.username = data.username
-    store.current_session.roles = data.roles
-  end
-
-  yield store
-end
-
-def authenticated_session(user : User) : Session::MemoryStore(UserSession)
-  store = Session::MemoryStore(UserSession).new
-  store.create
-  store.current_session.user_id = user.id
-  store.current_session.username = user.username
-  store.current_session.roles = user.roles
-  store
-end
+cookies = HTTP::Cookies.new
+headers = HTTP::Headers.new
+cookies.add_request_headers(headers)
+response = HTTP::Client.get("http://#{address}/login", headers)
+cookies.fill_from_server_headers(response.headers)
 ```
-
-### Endpoint Tests
-
-```crystal
-# spec/endpoints/profile_endpoint_spec.cr
-require "./spec_helper"
-
-describe ProfileEndpoint do
-  it "returns profile for authenticated user" do
-    user = User.create(username: "alice", email: "alice@example.com")
-
-    with_session do |store|
-      store.current_session.user_id = user.id
-      store.current_session.username = user.username
-
-      # Mock the context with session store
-      context = create_test_context("/profile")
-      context.set("session_store", store)
-
-      endpoint = ProfileEndpoint.new(context)
-      response = endpoint.call
-
-      response.username.should eq("alice")
-    end
-  end
-
-  it "rejects unauthenticated requests" do
-    with_session do |store|
-      context = create_test_context("/profile")
-      context.set("session_store", store)
-
-      endpoint = ProfileEndpoint.new(context)
-
-      expect_raises(Azu::Unauthorized) do
-        endpoint.call
-      end
-    end
-  end
-end
-```
-
-## Graceful Shutdown
-
-Handle server shutdown to properly close cluster connections:
-
-```crystal
-# src/app.cr
-at_exit do
-  if store = Session.config.store
-    if clustered = store.as?(Session::ClusteredRedisStore(UserSession))
-      clustered.shutdown
-    end
-  end
-end
-
-Signal::INT.trap do
-  Azu.stop
-  exit
-end
-
-Signal::TERM.trap do
-  Azu.stop
-  exit
-end
-```
-
-## Complete Example
-
-See the [azu-session-example](https://github.com/azutoolkit/azu-session-example) repository for a complete working example with:
-
-- User authentication (login/logout)
-- Protected routes
-- Flash messages
-- Admin authorization
-- Redis session storage
-- Test coverage

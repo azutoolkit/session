@@ -7,10 +7,18 @@ module Session
 
     def call(context : HTTP::Server::Context)
       load_session(context)
+      output = commit_before_first_write(context)
       call_next(context)
-      save_session(context)
+      output.commit
     ensure
       @session.release
+    end
+
+    # The session is saved as soon as the response starts, so its cookies still go out with it.
+    private def commit_before_first_write(context : HTTP::Server::Context) : CommitOnWrite
+      CommitOnWrite.new(context.response.output) { save_session(context) }.tap do |output|
+        context.response.output = output
+      end
     end
 
     private def load_session(context : HTTP::Server::Context)

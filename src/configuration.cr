@@ -29,6 +29,11 @@ module Session
     property session_key : String = "_session"
     property secret : String = DEFAULT_SECRET
 
+    # Cookie attributes. Cookies are always HttpOnly. Secure keeps them off plain http (browsers
+    # still accept a Secure cookie over http on localhost); turn it off only for an http-only setup.
+    property cookie_secure : Bool = true
+    property cookie_same_site : HTTP::Cookie::SameSite = HTTP::Cookie::SameSite::Strict
+
     # Cluster configuration for multi-node deployments with Redis Pub/Sub
     property cluster : ClusterConfig = ClusterConfig.new
 

@@ -61,6 +61,8 @@ All metrics are tagged with `store` (the store type name). Error metrics also in
 The `Metrics::Helper` module provides convenience methods:
 
 ```crystal
+duration = 5.milliseconds
+
 Session::Metrics::Helper.record_created("redis")
 Session::Metrics::Helper.record_load_time("redis", duration)
 Session::Metrics::Helper.record_error("redis", "ConnectionError")

@@ -199,7 +199,7 @@ module Session
       end
     rescue ex : Exception
       Log.warn { "Error during bulk delete: #{ex.message}" }
-      deleted_count
+      0_i64
     end
 
     def all_session_ids : Array(String)

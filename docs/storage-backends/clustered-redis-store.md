@@ -100,6 +100,7 @@ sequenceDiagram
 
 ### Constructor
 
+<!-- skip -->
 ```crystal
 def initialize(
   client : Redis = Redis.new,
@@ -114,7 +115,7 @@ store = Session::ClusteredRedisStore(UserSession).new(client: redis)
 
 # Get session (checks cache first)
 session = store[session_id]      # Raises if not found
-session = store[session_id]?     # Returns nil if not found
+found = store[session_id]?       # Returns nil if not found
 
 # Set session (updates cache, broadcasts if configured)
 store[session_id] = session

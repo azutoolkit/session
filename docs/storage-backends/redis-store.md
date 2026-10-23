@@ -40,7 +40,7 @@ end
 Or with an existing pool:
 
 ```crystal
-pool = Session::ConnectionPool.new(config)
+pool = Session::ConnectionPool.new(Session::ConnectionPoolConfig.new(size: 10))
 config.store = Session::RedisStore(UserSession).new(pool: pool)
 ```
 

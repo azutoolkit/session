@@ -19,7 +19,7 @@ Session provides presets for common scenarios, reducing configuration from 14+ l
 
 ```crystal
 Session.configure do |config|
-  config = Configuration.from_preset(:development)
+  config.apply_preset(:development)
   config.store = Session::MemoryStore(UserSession).new
 end
 ```
@@ -28,7 +28,7 @@ end
 
 ```crystal
 Session.configure do |config|
-  config = Configuration.from_preset(:production)
+  config.apply_preset(:production)
   config.secret = ENV.fetch("SESSION_SECRET")
   config.store = Session::RedisStore(UserSession).new(client: Redis.new)
 end
@@ -50,7 +50,7 @@ Start with a preset and override specific settings:
 
 ```crystal
 Session.configure do |config|
-  config = Configuration.from_preset(:production)
+  config.apply_preset(:production)
 
   # Override specific settings
   config.timeout = 8.hours
@@ -84,10 +84,13 @@ end
 | `secret` | `String` | (default) | Encryption secret (32+ chars recommended) |
 | `timeout` | `Time::Span` | `1.hour` | Session lifetime |
 | `session_key` | `String` | `"_session"` | Cookie name |
-| `store` | `Store` | `nil` | Storage backend |
+| `store` | `Store` | `nil` | Storage backend (typed by `Session.use_store`) |
+| `cookie_secure` | `Bool` | `true` | `Secure` attribute of the session cookies |
+| `cookie_same_site` | `HTTP::Cookie::SameSite` | `Strict` | `SameSite` attribute of the session cookies |
 
 ## Environment-Based Configuration
 
+<!-- skip -->
 ```crystal
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]

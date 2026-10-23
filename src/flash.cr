@@ -83,6 +83,11 @@ module Session
       now.empty? && @next.empty?
     end
 
+    # The messages a view shows: this request's, and those set during it.
+    def to_h : Hash(String, String)
+      now.merge(@next)
+    end
+
     # Get all message keys
     def keys : Array(String)
       (now.keys + @next.keys).uniq

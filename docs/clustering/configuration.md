@@ -40,7 +40,7 @@ Session.configure do |config|
 
   # Cluster configuration
   config.cluster.enabled = true
-  config.cluster.node_id = ENV["NODE_ID"]? || "#{hostname}-#{process_id}"
+  config.cluster.node_id = ENV["NODE_ID"]? || "#{System.hostname}-#{Process.pid}"
   config.cluster.channel = "myapp:sessions:invalidate"
   config.cluster.local_cache_enabled = true
   config.cluster.local_cache_ttl = 1.minute

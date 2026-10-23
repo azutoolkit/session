@@ -47,6 +47,9 @@ When `enable_retry` is true, `RedisStore` automatically wraps all operations wit
 For custom retry logic outside the store:
 
 ```crystal
+def some_operation
+end
+
 # Retry any exception
 Session::Retry.with_retry(Session.config.retry_config) do
   some_operation

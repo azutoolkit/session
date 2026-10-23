@@ -219,8 +219,9 @@ sequenceDiagram
 
 ### Application Health Check
 
+<!-- skip -->
 ```crystal
-# Add health check endpoint
+# Add a health check endpoint (the `get` macro is your web framework's)
 get "/health" do
   store = Session.config.store.not_nil!.as(Session::ClusteredRedisStore(UserSession))
 
@@ -308,9 +309,15 @@ graph LR
 ```crystal
 # Custom metrics backend
 class PrometheusSessionMetrics < Session::Metrics::Backend
-  def increment(name : String, tags : Hash(String, String) = {} of String => String)
+  def increment(name : String, tags : Hash(String, String) = {} of String => String) : Nil
     labels = tags.map { |k, v| "#{k}=\"#{v}\"" }.join(",")
     # Push to Prometheus
+  end
+
+  def timing(name : String, duration : Time::Span, tags : Hash(String, String) = {} of String => String) : Nil
+  end
+
+  def gauge(name : String, value : Float64, tags : Hash(String, String) = {} of String => String) : Nil
   end
 end
 
@@ -400,6 +407,8 @@ config.encrypt_redis_data = true
 ### 5. Implement Graceful Degradation
 
 ```crystal
+redis = Redis.new
+
 # Application continues working even if clustering fails
 begin
   store = Session::ClusteredRedisStore(UserSession).new(client: redis)
