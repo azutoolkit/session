@@ -1,7 +1,20 @@
 require "./spec_helper"
 require "../src/azu"
 
-Session::Web.accessors(UserSession)
+Session::Web.use_store(Session::MemoryStore(UserSession))
+
+# A store that keeps serialized copies, as Redis does: later changes to the live session object
+# do not reach the store unless it is saved again.
+class WebSpecSerializingStore < Session::MemoryStore(UserSession)
+  def []=(key : String, session : UserSession) : UserSession
+    super(key, UserSession.from_json(session.to_json))
+    session
+  end
+
+  def tracked_sessions : Int32
+    @mutex.synchronize { @current_sessions.size }
+  end
+end
 
 # A tiny app behind the session handler, standing in for an Azu application.
 class WebSpecApp
@@ -30,6 +43,26 @@ class WebSpecApp
       @store.current_session.username = params["name"]
       sleep 20.milliseconds
       context.response.print @store.current_session.username
+    when {"GET", "/late"}
+      @store.current_session.username = "before"
+      context.response.print "ok"
+      context.response.flush
+      @store.current_session.username = "after"
+      @store.flash["notice"] = "late flash"
+    when {"POST", "/late-login"}
+      context.response.print "ok"
+      context.response.flush
+      @store.authenticate { |session| session.username = params["name"] }
+    when {"GET", "/spawned"}
+      @store.current_session.username = "alice"
+      id = @store.session_id
+      done = Channel(Nil).new
+      spawn do
+        context.response.print id
+        context.response.flush
+        done.send(nil)
+      end
+      done.receive
     when {"GET", "/large"}
       @store.current_session.username = params["name"]
       context.response.print "x" * 200_000
@@ -179,8 +212,53 @@ describe "Session over a real HTTP::Server" do
         response = browser.request("GET", "/large?name=alice")
 
         response.body.bytesize.should eq 200_000
-        response.headers["Set-Cookie"]?.should_not be_nil
+        response.headers["Set-Cookie"].should contain browser.cookies[Session.config.session_key].value
+        browser.get("/me").should start_with "alice|"
       end
+    end
+
+    it "saves changes made after the response started" do
+      store = WebSpecSerializingStore.new
+      with_web_server(store) do |address|
+        browser = WebSpecBrowser.new(address)
+        browser.get("/late")
+
+        browser.get("/me").should eq "after|late flash"
+      end
+    end
+
+    it "keeps the new id of a login made after the response started on the server" do
+      store = WebSpecSerializingStore.new
+      with_web_server(store) do |address|
+        browser = WebSpecBrowser.new(address)
+        old_id = browser.get("/id")
+        browser.post("/late-login?name=alice")
+
+        store[old_id]?.should be_nil
+        store.find_first { |session| session.username == "alice" }.should_not be_nil
+      end
+    end
+
+    it "saves the session of the request when a spawned fiber starts the response" do
+      store = WebSpecSerializingStore.new
+      with_web_server(store) do |address|
+        browser = WebSpecBrowser.new(address)
+        id = browser.get("/spawned")
+
+        browser.cookies[Session.config.session_key].value.should eq id
+        store.tracked_sessions.should eq 0
+        browser.get("/me").should eq "alice|"
+      end
+    end
+  end
+
+  describe "context accessors" do
+    it "raise a clear error when no SessionHandler served the request" do
+      context = HTTP::Server::Context.new(HTTP::Request.new("GET", "/"), HTTP::Server::Response.new(IO::Memory.new))
+
+      expect_raises(Session::Web::MissingSession, /Session::SessionHandler/) { context.session }
+      expect_raises(Session::Web::MissingSession) { context.flash }
+      Session.session.current_session?.should be_nil
     end
   end
 
@@ -210,6 +288,16 @@ describe "Session over a real HTTP::Server" do
           response.status_code.should eq 200
           response.body.should eq "example|"
         end
+      end
+    end
+
+    it "freezes the cookie at the first byte of the response" do
+      with_web_server(Session::CookieStore(UserSession).new) do |address|
+        browser = WebSpecBrowser.new(address)
+        browser.get("/late")
+
+        # Set-Cookie cannot follow the headers: what was set after the first write is not in the cookie
+        browser.get("/me").should eq "before|"
       end
     end
 
@@ -249,6 +337,47 @@ describe "Session over a real HTTP::Server" do
     ensure
       Session.config.cookie_secure = true
       Session.config.cookie_same_site = HTTP::Cookie::SameSite::Strict
+    end
+  end
+
+  describe "cookie option validation" do
+    after_each do
+      Session.config.allow_insecure_cookies = false
+      Session.config.cookie_secure = true
+      Session.config.cookie_same_site = HTTP::Cookie::SameSite::Strict
+    end
+
+    it "refuses SameSite=None without Secure" do
+      expect_raises(Session::InvalidCookieOptions, /SameSite=None/) do
+        Session.configure do |config|
+          config.cookie_same_site = HTTP::Cookie::SameSite::None
+          config.cookie_secure = false
+        end
+      end
+    end
+
+    it "refuses insecure cookies when a secure secret is required" do
+      expect_raises(Session::InvalidCookieOptions, /allow_insecure_cookies/) do
+        Session.configure do |config|
+          config.require_secure_secret = true
+          config.cookie_secure = false
+        end
+      end
+    end
+
+    it "accepts insecure cookies when explicitly allowed" do
+      Session.configure do |config|
+        config.require_secure_secret = true
+        config.cookie_secure = false
+        config.allow_insecure_cookies = true
+      end
+    end
+
+    it "refuses to build a cookie with invalid options" do
+      Session.config.cookie_same_site = HTTP::Cookie::SameSite::None
+      Session.config.cookie_secure = false
+
+      expect_raises(Session::InvalidCookieOptions) { Session.session.build_cookie("a", "b") }
     end
   end
 end

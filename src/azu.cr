@@ -35,16 +35,26 @@ module Session::Web
 
   # Adds `HTTP::Server::Context#session` (typed as `session_type`) and `#flash`. They read the
   # current request's session, so they are only meaningful behind a `Session::SessionHandler`.
-  # Call it after `Session.use_store`.
+  # Call it after `Session.use_store`, and once: calling it again redefines the accessors and their
+  # types for the whole program.
+  #
+  # They are valid inside the request's fiber only (a `spawn`ed fiber, or a WebSocket channel after
+  # the handler returned, has no session) and raise `MissingSession` anywhere else.
   macro accessors(session_type)
     class ::HTTP::Server::Context
       def session : {{ session_type }}
-        ::Session.session.current_session
+        ::Session.session.current_session? || raise ::Session::Web::MissingSession.new
       end
 
       def flash : ::Session::Flash
-        ::Session.session.flash
+        session.flash
       end
+    end
+  end
+
+  class MissingSession < Exception
+    def initialize
+      super("no session for this request: is Session::SessionHandler in the handler chain before this endpoint?")
     end
   end
 end

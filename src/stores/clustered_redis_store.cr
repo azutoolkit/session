@@ -157,49 +157,51 @@ module Session
     def bulk_delete(&predicate : T -> Bool) : Int64
       deleted_count = 0_i64
 
-      # We need to track which sessions are deleted to broadcast invalidations
-      if @coordinator.config.enabled && @coordinator.running?
-        # Iterate through sessions and delete matching ones, broadcasting invalidations
-        cursor = "0"
-        pattern = "session:*"
+      begin
+        # We need to track which sessions are deleted to broadcast invalidations
+        if @coordinator.config.enabled && @coordinator.running?
+          # Iterate through sessions and delete matching ones, broadcasting invalidations
+          cursor = "0"
+          pattern = "session:*"
 
-        loop do
-          result = @client.scan(cursor, match: pattern, count: 100)
-          cursor = result[0].as(String)
-          keys = result[1].as(Array(Redis::RedisValue))
+          loop do
+            result = @client.scan(cursor, match: pattern, count: 100)
+            cursor = result[0].as(String)
+            keys = result[1].as(Array(Redis::RedisValue))
 
-          keys.each do |key|
-            key_str = key.as(String)
-            session_key = key_str.sub("session:", "")
+            keys.each do |key|
+              key_str = key.as(String)
+              session_key = key_str.sub("session:", "")
 
-            if session = @redis_store[session_key]?
-              if predicate.call(session)
-                @redis_store.delete(session_key)
-                @coordinator.local_cache.delete(session_key)
-                @coordinator.publish_invalidation(session_key)
-                deleted_count += 1
+              if session = @redis_store[session_key]?
+                if predicate.call(session)
+                  @redis_store.delete(session_key)
+                  @coordinator.local_cache.delete(session_key)
+                  @coordinator.publish_invalidation(session_key)
+                  deleted_count += 1
+                end
               end
             end
+
+            break if cursor == "0"
           end
 
-          break if cursor == "0"
+          deleted_count
+        else
+          # No clustering, just delegate and clear local cache entries as needed
+          @redis_store.bulk_delete do |session|
+            if predicate.call(session)
+              @coordinator.local_cache.delete(session.session_id)
+              true
+            else
+              false
+            end
+          end
         end
-
+      rescue ex : Exception
+        Log.warn { "Error during bulk delete after #{deleted_count} sessions: #{ex.message}" }
         deleted_count
-      else
-        # No clustering, just delegate and clear local cache entries as needed
-        @redis_store.bulk_delete do |session|
-          if predicate.call(session)
-            @coordinator.local_cache.delete(session.session_id)
-            true
-          else
-            false
-          end
-        end
       end
-    rescue ex : Exception
-      Log.warn { "Error during bulk delete: #{ex.message}" }
-      0_i64
     end
 
     def all_session_ids : Array(String)

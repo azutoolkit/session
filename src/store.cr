@@ -32,6 +32,11 @@ module Session
       @mutex.synchronize { @current_sessions[Fiber.current]? || remember(T.new) }
     end
 
+    # The current fiber's session, or nil when no request is being served on it.
+    def current_session? : T?
+      @mutex.synchronize { @current_sessions[Fiber.current]? }
+    end
+
     def current_session=(current_session : T)
       @mutex.synchronize { remember(current_session) }
     end
@@ -175,6 +180,7 @@ module Session
 
     # A cookie carrying the configured security attributes, expiring with the session timeout.
     def build_cookie(name : String, value : String, host : String = "") : HTTP::Cookie
+      Session.config.validate_cookie_options!
       HTTP::Cookie.new(
         name: name,
         value: value,

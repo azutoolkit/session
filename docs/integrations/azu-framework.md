@@ -117,14 +117,16 @@ Session.configure do |config|
 end
 ```
 
-Browsers keep a `Secure` cookie over plain http on `localhost`, so development needs no change.
+Browsers keep a `Secure` cookie over plain http on `localhost`, so development needs no change. `Session.configure` raises `Session::InvalidCookieOptions` for `SameSite=None` without `Secure` (browsers drop it), and for `cookie_secure = false` where a secure secret is required (production, staging) unless you set `config.allow_insecure_cookies = true`.
 
 Choose the store by how you must revoke sessions. The cookie store keeps the session in the browser: signing out clears the cookie, but a copy of it stays valid until it expires, and `authenticate` cannot invalidate the old copy. Use `RedisStore` (or the memory store on a single server) when a session must be revocable.
 
 ## Things to know
 
 - The current session is kept per fiber. A fiber you `spawn` during a request starts with a blank one: read what you need before spawning.
-- The session is saved just before the first byte of the response is written. Changes made after that (while streaming) are not saved.
+- The `Set-Cookie` headers are written just before the first byte of the response. What an endpoint changes after that (after `print` or `flush`) still reaches a server-side store (memory, Redis), which is saved again when the handler returns, but it cannot reach the cookies: the `CookieStore` data cookie holds the state as of the first write, and a session id regenerated after the first write leaves the browser with the old id. Set the session before you write. The WebSocket upgrade response (101) carries no `Set-Cookie` either, so establish the session on a normal request first.
+- `context.session` and `context.flash` are valid inside the request's fiber only. Without a `Session::SessionHandler` before the endpoint, in a `spawn`ed fiber, or in a WebSocket channel after the handler returned, they raise `Session::Web::MissingSession`. A fiber that starts the response (streaming, SSE) is fine: the handler saves the request's session for it. Read what you need before you `spawn`.
+- `Session::Web.accessors` (and `use_store`, which calls it) defines the accessors for the whole program: call it once.
 - Static files that pass through the handler also rotate the flash. Mount the static handler before the session handler.
 - Azu's own `Azu::Helpers::Context#session` and `#flash` read unsigned `_session` and `_flash` cookies, not this shard's: pass the values to your templates as shown above.
 

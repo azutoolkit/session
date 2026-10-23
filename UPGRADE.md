@@ -7,6 +7,8 @@ Nothing here needs a code change. Semver impact: minor (new opt-in API, one bug 
 - `require "session/azu"` is new and opt-in: `Session::Web.use_store(Session::CookieStore(UserSession))` declares the store like `Session.use_store` does, and adds the typed `context.session` and `context.flash` to `HTTP::Server::Context`. See [the Azu guide](docs/integrations/azu-framework.md).
 - `config.cookie_secure` (default `true`) and `config.cookie_same_site` (default `SameSite::Strict`) replace the values that were hard-coded; the defaults are the previous behavior.
 - `Session::SessionHandler` now saves the session just before the first byte of the response is written. Before, a response larger than the output buffer, or one that was flushed, went out without its `Set-Cookie`: a new session was never established and a changed cookie-store session was lost. The handler wraps `context.response.output` to do this; a handler placed after it may wrap the output again.
+- `config.allow_insecure_cookies` and `Session::InvalidCookieOptions`: `Session.configure` now refuses `cookie_same_site = None` with `cookie_secure = false`, and `cookie_secure = false` when `require_secure_secret` is on, unless `allow_insecure_cookies = true`. Only code that already turned `Secure` off is affected.
+- `Session::Store#current_session?` returns the request's session without creating one.
 - `Session::Flash#to_h` returns the messages a view shows.
 
 ## Upgrading from the `SessionData` API to `Session::Base`

@@ -134,6 +134,7 @@ module Session
 
   def self.configure(&)
     with CONFIG yield CONFIG
+    CONFIG.validate_cookie_options!
   end
 
   def self.config

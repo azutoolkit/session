@@ -9,6 +9,8 @@ module Session
       @committed = false
     end
 
+    getter? committed : Bool
+
     def commit : Nil
       return if @committed
       @committed = true

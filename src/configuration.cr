@@ -34,6 +34,10 @@ module Session
     property cookie_secure : Bool = true
     property cookie_same_site : HTTP::Cookie::SameSite = HTTP::Cookie::SameSite::Strict
 
+    # Where a secure secret is required (production, staging), insecure cookies are refused too,
+    # unless this opts out explicitly.
+    property allow_insecure_cookies : Bool = false
+
     # Cluster configuration for multi-node deployments with Redis Pub/Sub
     property cluster : ClusterConfig = ClusterConfig.new
 
@@ -168,6 +172,22 @@ module Session
       end
     end
 
+    # Raises `InvalidCookieOptions` for cookie options browsers reject or that defeat the secret requirement.
+    def validate_cookie_options! : Nil
+      return if cookie_secure
+
+      if cookie_same_site.none?
+        raise InvalidCookieOptions.new("SameSite=None cookies must be Secure: set cookie_secure = true or another cookie_same_site")
+      end
+
+      if require_secure_secret && !allow_insecure_cookies
+        raise InvalidCookieOptions.new(
+          "Insecure cookies (cookie_secure = false) are not allowed when require_secure_secret is enabled. " \
+          "Set allow_insecure_cookies = true to opt out explicitly."
+        )
+      end
+    end
+
     def session
       raise "Session store not configured. Call Session.use_store(StoreType) before Session.configure."
     end
@@ -208,6 +228,12 @@ module Session
         }
         @secret_warning_logged = true
       end
+    end
+  end
+
+  class InvalidCookieOptions < Exception
+    def initialize(message : String = "Invalid session cookie options", cause : Exception? = nil)
+      super(message, cause)
     end
   end
 

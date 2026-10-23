@@ -9,16 +9,43 @@ module Session
       load_session(context)
       output = commit_before_first_write(context)
       call_next(context)
-      output.commit
+      persist_after_commit(output)
     ensure
       @session.release
     end
 
     # The session is saved as soon as the response starts, so its cookies still go out with it.
+    # The response may be started by a fiber the handler spawned, which has no current session:
+    # that fiber is given the request's session for the save, and forgets it again.
     private def commit_before_first_write(context : HTTP::Server::Context) : CommitOnWrite
-      CommitOnWrite.new(context.response.output) { save_session(context) }.tap do |output|
-        context.response.output = output
-      end
+      request_fiber = Fiber.current
+      request_session = @session.current_session
+      CommitOnWrite.new(context.response.output) do
+        if Fiber.current == request_fiber
+          save_session(context)
+        else
+          save_for_other_fiber(context, request_session)
+        end
+      end.tap { |output| context.response.output = output }
+    end
+
+    private def save_for_other_fiber(context : HTTP::Server::Context, session : T)
+      @session.current_session = session
+      save_session(context)
+    ensure
+      @session.release
+    end
+
+    # What the endpoint changed after the response started cannot reach the cookies any more
+    # (headers are sent), but a server-side store still gets the final state.
+    private def persist_after_commit(output : CommitOnWrite) : Nil
+      already_sent = output.committed?
+      output.commit
+      return unless already_sent && !@session.is_a?(CookieStore(T))
+
+      @session[@session.session_id] = @session.current_session
+    rescue ex : Exception
+      Log.warn { "Failed to save the session after the response started: #{ex.message}" }
     end
 
     private def load_session(context : HTTP::Server::Context)
