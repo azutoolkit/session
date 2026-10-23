@@ -53,7 +53,7 @@ When enabled, the `RedisStore` wraps operations with the circuit breaker. On fai
 ## Monitoring
 
 ```crystal
-breaker = store.circuit_breaker
+breaker = store.circuit_breaker.not_nil! # nil unless circuit_breaker_enabled
 
 breaker.state              # => CircuitState::Closed
 breaker.failure_count      # => 0

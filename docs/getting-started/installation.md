@@ -43,7 +43,7 @@ Session.configure do |config|
   config.store = Session::MemoryStore(TestSession).new
 end
 
-store = Session.config.store!
+store = Session.session
 session = store.create
 puts "Session ID: #{session.session_id}"
 puts "Installation successful!"

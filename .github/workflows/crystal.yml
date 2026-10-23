@@ -34,17 +34,33 @@ jobs:
         run: shards install
 
       - name: Check code style
-        run: crystal tool format --check src spec
+        run: crystal tool format --check src spec scripts
 
       - name: Run tests
         run: crystal spec --error-trace
         env:
           REDIS_HOST: redis
 
+  docs:
+    runs-on: ubuntu-latest
+
+    container:
+      image: crystallang/crystal:1.19.1
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: shards install
+
+      - name: Check the code blocks of the documentation compile
+        run: crystal run scripts/check_docs.cr -- README.md UPGRADE.md $(find docs -name '*.md' | sort)
+
   release:
     runs-on: ubuntu-latest
     needs:
       - test
+      - docs
     # Releasing tags the version and commits the bump to master, so only a push to master may do it
     # (on a pull request the tag already exists and the job fails, or would write to master).
     if: ${{ success() && github.event_name == 'push' }}

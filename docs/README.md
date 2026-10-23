@@ -44,7 +44,9 @@ class UserSession < Session::Base
   property role : String = "guest"
 end
 
-# Configure session management
+# Declare the store type, then configure session management
+Session.use_store(Session::RedisStore(UserSession))
+
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
   config.timeout = 24.hours

@@ -63,8 +63,10 @@ store.flash.keep("notice")
 | `has_key?(key)` | `Bool` | Check if message exists |
 | `empty?` | `Bool` | True if no messages in either hash |
 | `keys` | `Array(String)` | All unique keys across both hashes |
+| `to_h` | `Hash(String, String)` | The messages a view shows (`now` plus those set during this request) |
 
 ## See Also
 
 - [Session Lifecycle](session-lifecycle.md)
+- [Azu integration](../integrations/azu-framework.md) -- `context.flash`
 - [Quick Start](../getting-started/quick-start.md)

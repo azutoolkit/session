@@ -16,7 +16,7 @@
 | **Multiple Backends** | Cookie, Memory, Redis, or Clustered Redis—pick what fits |
 | **Battle-Tested Security** | AES-256 encryption, HMAC-SHA256, PBKDF2, client binding |
 | **Production Resilience** | Circuit breakers, retry logic, graceful degradation |
-| **346 Tests** | Comprehensive coverage you can rely on |
+| **Azu Ready** | `require "session/azu"` adds typed `context.session` and `context.flash` |
 
 ---
 
@@ -40,6 +40,9 @@ class UserSession < Session::Base
   property? authenticated : Bool = false
   property username : String? = nil
 end
+
+# Declare the session type and its store once (this is what types `config.store`)
+Session.use_store(Session::MemoryStore(UserSession))
 
 # Configure once
 Session.configure do |config|
@@ -68,7 +71,9 @@ That's it. You're ready to build.
 | **RedisStore** | Production deployments | Redis | Yes |
 | **ClusteredRedisStore** | High-scale, multi-node | Redis + local cache | Yes |
 
+<!-- skip -->
 ```crystal
+# One store at a time: `Session.use_store(StoreType)` declares which
 # Cookie (stateless, client-side)
 config.store = Session::CookieStore(UserSession).new
 
@@ -194,7 +199,7 @@ session.touch                # Extend expiration
 store.flash["notice"] = "Saved successfully"
 store.flash["error"] = "Something went wrong"
 
-# Read (clears after access)
+# Read (on the next request only; the request after that no longer sees it)
 store.flash.now["notice"]  # => "Saved successfully"
 ```
 
@@ -202,6 +207,7 @@ store.flash.now["notice"]  # => "Saved successfully"
 
 ```crystal
 store = Session::MemoryStore(UserSession).new
+compromised_id = 42_i64
 
 # Iterate sessions
 store.each_session { |s| puts s.username }
@@ -220,22 +226,62 @@ store.bulk_delete { |s| s.user_id == compromised_id }
 ```crystal
 require "http/server"
 
+class HelloHandler
+  include HTTP::Handler
+
+  def call(context : HTTP::Server::Context)
+    context.response.print "Hello, #{Session.session.current_session.username || "guest"}"
+  end
+end
+
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
   config.store = Session::MemoryStore(UserSession).new
 end
 
-store = Session.config.store.not_nil!
-
 server = HTTP::Server.new([
-  Session::SessionHandler.new(store),
-  YourAppHandler.new,
-])
+  Session::SessionHandler.new(Session.session),
+  HelloHandler.new,
+] of HTTP::Handler)
 
 server.listen(8080)
 ```
 
-The handler automatically loads sessions from cookies, validates bindings, handles corruption gracefully, and sets response cookies.
+`Session::SessionHandler` loads the session from the request cookies, validates client binding, recovers from corrupt or expired sessions with a fresh one, and sends the cookies with the response, even for large or streamed bodies. `Session.session` is the store you configured, typed (`Session.use_store`).
+
+## Azu Integration
+
+`require "session/azu"` is opt-in. It adds the typed `context.session` and `context.flash` to `HTTP::Server::Context`, which is what an Azu endpoint has at hand.
+
+```crystal
+require "session/azu"
+
+class UserSession < Session::Base
+  property user_id : Int64? = nil
+
+  def authenticated? : Bool
+    !user_id.nil?
+  end
+end
+
+Session::Web.use_store(Session::CookieStore(UserSession))
+
+Session.configure do |config|
+  config.secret = ENV["SESSION_SECRET"]
+  config.store = Session::CookieStore(UserSession).new
+end
+
+def sign_in(context : HTTP::Server::Context, user_id : Int64) : Nil
+  Session.session.authenticate { |session| session.user_id = user_id }
+  context.flash["notice"] = "Welcome back"
+end
+
+def welcome(context : HTTP::Server::Context) : String?
+  context.flash.now["notice"]?
+end
+```
+
+Cookies are always `HttpOnly`, `Secure` and `SameSite=Strict`; `config.cookie_secure` and `config.cookie_same_site` change that. See the [Azu guide](docs/integrations/azu-framework.md).
 
 ---
 

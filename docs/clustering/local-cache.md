@@ -211,6 +211,8 @@ config.cluster.local_cache_ttl = 2.minutes
 ```crystal
 # Track hit rate over time
 # Alert if hit rate drops below threshold
+stats = store.cache_stats
+
 if stats.hit_rate < 0.7
   Log.warn { "Cache hit rate below 70%: #{stats.hit_rate}" }
 end

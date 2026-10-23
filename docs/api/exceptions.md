@@ -25,6 +25,8 @@ Complete exception reference for the Session library. All exceptions accept an o
 ## Usage Pattern
 
 ```crystal
+session_id = "an-id"
+
 begin
   session = store[session_id]
 rescue ex : Session::SessionExpiredException
@@ -39,18 +41,16 @@ end
 ## Exceptions with Extra Properties
 
 ```crystal
-# CookieSizeExceededException
+begin
+  store.create
 rescue ex : Session::CookieSizeExceededException
-  ex.actual_size  # => 5120
-  ex.max_size     # => 4096
-
-# SessionBindingException
+  ex.actual_size # => 5120
+  ex.max_size    # => 4096
 rescue ex : Session::SessionBindingException
-  ex.binding_type  # => "ip" or "user_agent"
-
-# CircuitOpenException
+  ex.binding_type # => "ip" or "user_agent"
 rescue ex : Session::CircuitOpenException
-  ex.time_until_retry  # => 25.seconds
+  ex.time_until_retry # => 25.seconds
+end
 ```
 
 ## Cause Chaining
@@ -58,9 +58,11 @@ rescue ex : Session::CircuitOpenException
 All exceptions preserve the underlying cause:
 
 ```crystal
+begin
+  store.create
 rescue ex : Session::SessionCorruptionException
-  ex.message  # => "Session data is corrupted"
-  ex.cause    # => JSON::ParseException (the original error)
+  ex.message # => "Session data is corrupted"
+  ex.cause   # => JSON::ParseException (the original error)
 end
 ```
 

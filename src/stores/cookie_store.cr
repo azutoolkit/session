@@ -153,17 +153,7 @@ module Session
       # Validate cookie size before creating
       validate_cookie_size!(encrypted_data)
 
-      HTTP::Cookie.new(
-        name: data_key,
-        value: encrypted_data,
-        expires: timeout.from_now,
-        secure: true,
-        domain: host,
-        path: "/",
-        samesite: HTTP::Cookie::SameSite::Strict,
-        http_only: true,
-        creation_time: Time.local
-      )
+      build_cookie(data_key, encrypted_data, host)
     rescue ex : Session::SessionValidationException | Session::CookieSizeExceededException
       raise ex
     rescue ex : Session::SessionEncryptionException

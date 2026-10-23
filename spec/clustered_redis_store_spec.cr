@@ -407,6 +407,30 @@ if REDIS_AVAILABLE
         end
       end
 
+      describe "#bulk_delete" do
+        it "deletes the sessions matching the predicate and returns how many" do
+          redis = redis_client
+          config = Session::ClusterConfig.new(enabled: false)
+          store = Session::ClusteredRedisStore(UserSession).new(redis, config)
+          store.clear
+
+          doomed = UserSession.new
+          doomed.username = "doomed"
+          kept = UserSession.new
+          kept.username = "kept"
+          store[doomed.session_id] = doomed
+          store[kept.session_id] = kept
+
+          store.bulk_delete { |session| session.username == "doomed" }.should eq 1
+          store[doomed.session_id]?.should be_nil
+          store[kept.session_id]?.should_not be_nil
+
+          store.clear
+          store.shutdown
+          redis.close
+        end
+      end
+
       describe "#each_session" do
         it "iterates over all sessions" do
           redis = redis_client

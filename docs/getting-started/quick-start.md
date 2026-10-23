@@ -60,7 +60,7 @@ end
 ### Create a Session
 
 ```crystal
-store = Session.config.store!
+store = Session.session
 
 # Create a new session
 session = store.create
@@ -117,7 +117,7 @@ Session.configure do |config|
   config.store = Session::MemoryStore(UserSession).new
 end
 
-store = Session.config.store!
+store = Session.session
 
 # Create server with session handler
 server = HTTP::Server.new([
@@ -125,11 +125,11 @@ server = HTTP::Server.new([
 ]) do |context|
   case context.request.path
   when "/login"
-    # Create session on login
-    session = store.create
-    session.user_id = 1
-    session.username = "alice"
-    store[session.session_id] = session
+    # Change the session's privileges and give it a new id (against session fixation)
+    store.authenticate do |session|
+      session.user_id = 1
+      session.username = "alice"
+    end
     context.response.print "Logged in as alice"
 
   when "/profile"
@@ -196,7 +196,7 @@ Session.configure do |config|
   config.store = Session::MemoryStore(UserSession).new
 end
 
-store = Session.config.store!
+store = Session.session
 
 # Server
 server = HTTP::Server.new([

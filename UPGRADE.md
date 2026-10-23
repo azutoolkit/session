@@ -1,8 +1,19 @@
 # Upgrade Guide
 
-## Upgrading to 2.0
+## Azu integration, cookie options and the response commit (no breaking change)
 
-Version 2.0 introduces a simplified, class-based session architecture that replaces the `SessionData` module and `SessionId(T)` wrapper with a single `Session::Base` class. This is a breaking change that requires migration.
+Nothing here needs a code change. Semver impact: minor (new opt-in API, one bug fix).
+
+- `require "session/azu"` is new and opt-in: `Session::Web.use_store(Session::CookieStore(UserSession))` declares the store like `Session.use_store` does, and adds the typed `context.session` and `context.flash` to `HTTP::Server::Context`. See [the Azu guide](docs/integrations/azu-framework.md).
+- `config.cookie_secure` (default `true`) and `config.cookie_same_site` (default `SameSite::Strict`) replace the values that were hard-coded; the defaults are the previous behavior.
+- `Session::SessionHandler` now saves the session just before the first byte of the response is written. Before, a response larger than the output buffer, or one that was flushed, went out without its `Set-Cookie`: a new session was never established and a changed cookie-store session was lost. The handler wraps `context.response.output` to do this; a handler placed after it may wrap the output again.
+- `config.allow_insecure_cookies` and `Session::InvalidCookieOptions`: `Session.configure` now refuses `cookie_same_site = None` with `cookie_secure = false`, and `cookie_secure = false` when `require_secure_secret` is on, unless `allow_insecure_cookies = true`. Only code that already turned `Secure` off is affected.
+- `Session::Store#current_session?` returns the request's session without creating one.
+- `Session::Flash#to_h` returns the messages a view shows.
+
+## Upgrading from the `SessionData` API to `Session::Base`
+
+Releases before v1.0.28 defined sessions with the `SessionData` module and the `SessionId(T)` wrapper. From v1.0.28 on, a single `Session::Base` class replaces both. There was no 2.0 release: this migration happens inside the 1.0.x line, and the "Before" snippets below show code that no longer compiles.
 
 ### Breaking Changes Summary
 
@@ -24,6 +35,7 @@ The `SessionData` module and struct-based sessions are replaced with class inher
 
 **Before:**
 
+<!-- skip -->
 ```crystal
 struct UserSession
   include Session::SessionData
@@ -54,7 +66,7 @@ Key differences:
 - Inherit from `Session::Base` instead of including `Session::SessionData`
 - `Session::Base` includes `JSON::Serializable` automatically
 - `Session::Base` provides `session_id`, `created_at`, `expires_at`, `valid?`, `expired?`, `touch`, and `time_until_expiry`
-- Must implement abstract method `authenticated?` (use `property?` for simple boolean)
+- `authenticated?` returns `false` unless you override it (or declare `property? authenticated`)
 - All properties must have default values (for parameterless constructor)
 
 ---
@@ -65,6 +77,7 @@ The `provider` property is renamed to `store`, and store creation no longer uses
 
 **Before:**
 
+<!-- skip -->
 ```crystal
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
@@ -75,14 +88,19 @@ end
 **After:**
 
 ```crystal
+Session.use_store(Session::MemoryStore(UserSession))
+
 Session.configure do |config|
   config.secret = ENV["SESSION_SECRET"]
   config.store = Session::MemoryStore(UserSession).new
 end
 ```
 
-Store creation changes for each backend:
+`Session.use_store` declares the store type once, before `Session.configure`; it is what types `config.store` and `Session.session`.
 
+Store creation changes for each backend (one store at a time, the one `Session.use_store` names):
+
+<!-- skip -->
 ```crystal
 # Cookie Store
 # Before: Session::CookieStore(UserSession).provider
@@ -116,6 +134,7 @@ The `.data` accessor is removed. Session properties are accessed directly on the
 
 **Before:**
 
+<!-- skip -->
 ```crystal
 session = store.create
 session.data.user_id = 42
@@ -134,11 +153,14 @@ puts session.authenticated?
 
 For store-level access:
 
+<!-- skip -->
 ```crystal
 # Before
 provider.data.user_id
 provider.data.username
+```
 
+```crystal
 # After
 store.current_session.user_id
 store.current_session.username
@@ -150,6 +172,7 @@ store.current_session.username
 
 **Before:**
 
+<!-- skip -->
 ```crystal
 provider = Session.provider
 session = provider.create
@@ -170,6 +193,7 @@ Remove `SessionId(T)` wrapper references — stores now work directly with `T`.
 
 **Before:**
 
+<!-- skip -->
 ```crystal
 def handle_session(session : Session::SessionId(UserSession))
   puts session.data.username
@@ -194,6 +218,7 @@ Callback parameter types changed from `SessionData` to `Base`.
 
 **Before:**
 
+<!-- skip -->
 ```crystal
 config.on_started = ->(sid : String, data : Session::SessionData) do
   Log.info { "Session #{sid} started" }
@@ -214,6 +239,7 @@ end
 
 **Before:**
 
+<!-- skip -->
 ```crystal
 server = HTTP::Server.new([
   Session::SessionHandler.new(Session.provider),
@@ -224,12 +250,18 @@ server = HTTP::Server.new([
 **After:**
 
 ```crystal
-store = Session.config.store.not_nil!
+class MyAppHandler
+  include HTTP::Handler
+
+  def call(context : HTTP::Server::Context)
+    context.response.print "ok"
+  end
+end
 
 server = HTTP::Server.new([
-  Session::SessionHandler.new(store),
+  Session::SessionHandler.new(Session.session),
   MyAppHandler.new,
-])
+] of HTTP::Handler)
 ```
 
 ---
@@ -238,6 +270,7 @@ server = HTTP::Server.new([
 
 **Before:**
 
+<!-- skip -->
 ```crystal
 store.each_session { |s| puts s.data.username }
 admins = store.find_by { |s| s.data.roles.includes?("admin") }
