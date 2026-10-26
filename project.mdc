@@ -254,7 +254,7 @@ session.delete
 ## Dependencies
 
 ### Required
-- `crystal` >= 1.4.1
+- `crystal` >= 1.22.1
 - `redis` (for RedisStore)
 - `uuid` (for session IDs)
 - `openssl` (for encryption)
