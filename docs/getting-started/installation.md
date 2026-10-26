@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Crystal 1.0.0 or higher
+- Crystal 1.22.1 or newer
 - Redis 5.0+ (for Redis and Clustered Redis stores)
 
 ## Add Dependency
