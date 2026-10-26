@@ -2,9 +2,10 @@
 
 ## Crystal 1.22.1 or newer (no code change)
 
-`shard.yml` now declares `crystal: ">= 1.22.1"`. It was an exact `1.4.1` pin that no CI job ever built, and `.tool-versions`
-and CI now use 1.22.1 (the oldest supported version; CI also runs the latest release). If you build with an older Crystal,
-`shards` refuses to install the dependency: upgrade the compiler.
+`shard.yml` now declares `crystal: ">= 1.22.1"`. It was `crystal: 1.4.1`, a 1.4.1 minimum that no CI job ever built.
+`.tool-versions` and CI now use 1.22.1 (the oldest supported version; CI also runs the latest release). On an older
+Crystal, `shards` only prints a "may be incompatible with Crystal" warning and still installs, but the specs run on
+1.22.1 and newer only, so older compilers are unsupported: upgrade the compiler.
 
 ## Azu integration, cookie options and the response commit (no breaking change)
 

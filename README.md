@@ -18,7 +18,7 @@
 | **Production Resilience** | Circuit breakers, retry logic, graceful degradation |
 | **Azu Ready** | `require "session/azu"` adds typed `context.session` and `context.flash` |
 
-**Requires Crystal 1.22.1 or newer** (`crystal: ">= 1.22.1"` in `shard.yml`; it was an unbuilt exact `1.4.1` pin before, see [UPGRADE.md](UPGRADE.md)).
+**Requires Crystal 1.22.1 or newer** (`crystal: ">= 1.22.1"` in `shard.yml`; it was a `1.4.1` minimum that no job ever built, see [UPGRADE.md](UPGRADE.md); older compilers are unsupported).
 
 ---
 
