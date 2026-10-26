@@ -23,11 +23,13 @@ module Session
   end
 
   class Configuration
+    # The secret older releases signed with when none was configured. It is public, so it is never
+    # used by default any more and is refused where `require_secure_secret` holds.
     DEFAULT_SECRET = "1sxc1aNxGHTTZKlK5cpCgufJAqGM4G13"
 
     property timeout : Time::Span = 1.hour
     property session_key : String = "_session"
-    property secret : String = DEFAULT_SECRET
+    setter secret : String?
 
     # Cookie attributes. Cookies are always HttpOnly. Secure keeps them off plain http (browsers
     # still accept a Secure cookie over http on localhost); turn it off only for an http-only setup.
@@ -44,10 +46,44 @@ module Session
     # Environments that must not run on the published default secret.
     PRODUCTION_ENVIRONMENTS = %w(production staging)
 
-    # Security: require a secure secret (non-default) - raises if default secret is used.
-    # The default secret is public, so anyone could forge a session cookie signed with it:
-    # it is refused in production and staging (`CRYSTAL_ENV`) unless turned off explicitly.
-    property require_secure_secret : Bool = PRODUCTION_ENVIRONMENTS.includes?(ENV["CRYSTAL_ENV"]?)
+    # Whether a missing or published secret is an error rather than a warning. Unless set, it holds
+    # in production and staging, read from `CRYSTAL_ENV` (case-insensitive) each time it is checked.
+    setter require_secure_secret : Bool?
+
+    def require_secure_secret : Bool
+      @require_secure_secret.nil? ? Configuration.production_environment? : @require_secure_secret == true
+    end
+
+    def self.production_environment? : Bool
+      PRODUCTION_ENVIRONMENTS.includes?(ENV["CRYSTAL_ENV"]?.try(&.strip.downcase))
+    end
+
+    # The key sessions are encrypted and signed with: the one configured, else `SESSION_SECRET`.
+    # Without either, `InsecureSecretException` where `require_secure_secret` holds, and otherwise a
+    # random key for this process only (sessions do not survive a restart or reach another instance).
+    def secret : String
+      @secret ||= ENV["SESSION_SECRET"]?.presence || fallback_secret
+    end
+
+    private def fallback_secret : String
+      if require_secure_secret
+        raise InsecureSecretException.new(
+          "SESSION_SECRET is not set: set it, or configure one with Session.configure { |c| c.secret = ... }"
+        )
+      end
+      Configuration.process_secret
+    end
+
+    @@process_secret : String = Random::Secure.hex(32)
+    @@process_secret_warned = Atomic(Bool).new(false)
+
+    # The random fallback, one per process so every configuration agrees on it; warns once.
+    def self.process_secret : String
+      unless @@process_secret_warned.swap(true)
+        Log.warn { "SESSION_SECRET is not set: using a random session secret for this process only" }
+      end
+      @@process_secret
+    end
 
     # Digest algorithm for HMAC signatures (:sha256 recommended, :sha1 for legacy)
     property digest_algorithm : Symbol = :sha256

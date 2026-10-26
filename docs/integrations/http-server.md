@@ -143,7 +143,7 @@ end
 
 # Configure
 Session.configure do |config|
-  config.secret = ENV.fetch("SESSION_SECRET", "dev-secret-change-in-production!")
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 1.hour
   config.sliding_expiration = true
   config.store = Session::MemoryStore(UserSession).new

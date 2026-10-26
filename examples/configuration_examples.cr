@@ -9,7 +9,7 @@ Session.configure do |config|
   config.apply_preset(:development)
 
   # Override specific settings
-  config.secret = ENV["SESSION_SECRET"]? || Configuration::DEFAULT_SECRET
+  # No secret here: it is read from SESSION_SECRET, or random for this process in development
   config.timeout = 2.hours
 
   # Set your store

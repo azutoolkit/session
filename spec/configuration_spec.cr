@@ -278,3 +278,39 @@ describe Session::Configuration do
     end
   end
 end
+
+describe Session::Configuration do
+  describe "without a configured secret" do
+    around_each do |example|
+      previous = {ENV["CRYSTAL_ENV"]?, ENV["SESSION_SECRET"]?}
+      ENV.delete("SESSION_SECRET")
+      ENV["CRYSTAL_ENV"] = "development"
+      example.run
+    ensure
+      {"CRYSTAL_ENV", "SESSION_SECRET"}.zip(previous.not_nil!).each do |name, value|
+        value ? (ENV[name] = value) : ENV.delete(name)
+      end
+    end
+
+    it "never signs with the published default secret" do
+      config = Session::Configuration.new
+
+      config.secret.should_not eq Session::Configuration::DEFAULT_SECRET
+      config.using_default_secret?.should be_false
+      config.secret.should eq Session::Configuration.new.secret
+    end
+
+    it "reads SESSION_SECRET" do
+      ENV["SESSION_SECRET"] = "from-the-environment-0123456789abcdef"
+
+      Session::Configuration.new.secret.should eq "from-the-environment-0123456789abcdef"
+    end
+
+    it "is refused in production even when CRYSTAL_ENV is set after the configuration was built" do
+      config = Session::Configuration.new
+      ENV["CRYSTAL_ENV"] = "Production"
+
+      expect_raises(Session::InsecureSecretException, /SESSION_SECRET/) { config.encryptor }
+    end
+  end
+end

@@ -36,8 +36,8 @@ Declare the store type with `Session.use_store`, then configure:
 Session.use_store(Session::MemoryStore(UserSession))
 
 Session.configure do |config|
-  # Required: Secret key for encryption (use environment variable in production)
-  config.secret = ENV["SESSION_SECRET"]? || "your-32-character-secret-key-here"
+  # The key comes from SESSION_SECRET. Without it, development gets a random key per process
+  # and production refuses to start.
 
   # Session timeout
   config.timeout = 24.hours

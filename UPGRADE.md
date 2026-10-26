@@ -1,5 +1,18 @@
 # Upgrade Guide
 
+## No published default secret
+
+The secret used to default to a string published in this repository, so an app that never set one signed its
+cookies with a key anyone could use to forge a session. Now:
+
+- `config.secret` defaults to `SESSION_SECRET`. Without it, a random key for this process (one warning), so
+  sessions end when the process restarts and are not shared between instances. Set `SESSION_SECRET` to keep them.
+- In production and staging the missing secret raises `Session::InsecureSecretException` on first use.
+  `require_secure_secret` now reads `CRYSTAL_ENV` (case-insensitive) when it is checked, not when the shard loads;
+  setting it explicitly still wins.
+- `config.secret = nil` goes back to the default. `Configuration::DEFAULT_SECRET` still exists and is still refused
+  where `require_secure_secret` holds.
+
 ## Crystal 1.22.1 or newer (no code change)
 
 `shard.yml` now declares `crystal: ">= 1.22.1"`. It was `crystal: 1.4.1`, a 1.4.1 minimum that no CI job ever built.

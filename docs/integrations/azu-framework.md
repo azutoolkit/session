@@ -46,7 +46,7 @@ Session.configure do |config|
 end
 ```
 
-`SESSION_SECRET` is required in production and staging (`CRYSTAL_ENV`): the published default secret is refused there, because anyone could forge a cookie signed with it. Generate one with `Random::Secure.hex(32)` and keep it in your process environment.
+`SESSION_SECRET` is required in production and staging (`CRYSTAL_ENV`): without it the first session raises `Session::InsecureSecretException`. Elsewhere a missing secret means a random key for this process (with one warning), so sessions end at a restart. Generate one with `Random::Secure.hex(32)` and keep it in your process environment (`Azu::Env.secret("SESSION_SECRET")` gives the same behaviour).
 
 ## Mount the handler
 
