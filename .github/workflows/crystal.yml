@@ -64,6 +64,11 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    # The codacy job is not in `needs`: it does not gate releases.
+    # `test` is the whole matrix, so the release also waits for the `latest` leg: when a new Crystal release breaks the
+    # specs, releases stop until it is fixed (fail-fast is off so the 1.22.1 leg still reports). That is deliberate, the
+    # shard is only released when it works on the newest compiler too; to stop `latest` from gating, mark that leg
+    # `continue-on-error` via a matrix `experimental` flag.
     needs:
       - test
       - docs
