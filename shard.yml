@@ -2,7 +2,7 @@ name: session
 version: 1.0.32
 authors:
   - Elias J. Perez <eliasjpr@gmail.com>
-crystal: 1.4.1
+crystal: ">= 1.22.1"
 license: MIT
 dependencies:
   redis:
