@@ -67,6 +67,35 @@ describe Session::Store do
     end
   end
 
+  describe "expiry" do
+    it "does not load a cookie session whose expiry has passed" do
+      store = Session::CookieStore(UserSession).new
+      session = UserSession.new
+      session.username = "replayed"
+      session.expires_at = 1.second.ago
+
+      cookies = HTTP::Cookies.new
+      cookies << HTTP::Cookie.new(name: store.session_key, value: session.session_id)
+      cookies << HTTP::Cookie.new(name: store.data_key, value: Session.config.encryptor.encrypt_and_sign(session.to_json))
+      store.load_from(cookies)
+
+      store.current_session?.should be_nil
+      store.current_session.session_id.should_not eq session.session_id
+    end
+
+    it "still loads a cookie session that has not expired" do
+      store = Session::CookieStore(UserSession).new
+      session = UserSession.new
+
+      cookies = HTTP::Cookies.new
+      cookies << HTTP::Cookie.new(name: store.session_key, value: session.session_id)
+      cookies << HTTP::Cookie.new(name: store.data_key, value: Session.config.encryptor.encrypt_and_sign(session.to_json))
+      store.load_from(cookies)
+
+      store.current_session.session_id.should eq session.session_id
+    end
+  end
+
   describe "flash messages" do
     it "provides access to flash" do
       store = Session::MemoryStore(UserSession).new
