@@ -236,24 +236,25 @@ module Session
     # The encryptor for the current settings. It is reused while they stay the same, so PBKDF2
     # (`use_kdf`) runs once per secret, salt and iteration count, not on every encrypt and decrypt.
     def encryptor : Message::Encryptor
-      validate_secret!
       key = {secret, digest_algorithm, digest_fallback, use_kdf, kdf_iterations, kdf_salt}
-      cached = @encryptor_cache
+      validate_secret!(key[0])
+      cached = @encryptor_cache.get(:acquire)
       return cached.encryptor if cached && cached.key == key
 
       encryptor = Message::Encryptor.new(
         key[0],
-        digest: digest_algorithm,
-        fallback_digest: digest_fallback ? :sha1 : nil,
-        use_kdf: use_kdf,
-        kdf_iterations: kdf_iterations,
-        kdf_salt: kdf_salt
+        digest: key[1],
+        fallback_digest: key[2] ? :sha1 : nil,
+        use_kdf: key[3],
+        kdf_iterations: key[4],
+        kdf_salt: key[5]
       )
-      @encryptor_cache = EncryptorCache.new(key, encryptor)
+      @encryptor_cache.set(EncryptorCache.new(key, encryptor), :release)
       encryptor
     end
 
-    # One reference, so a fiber on another thread sees the old pair or the new one, never half of each.
+    # The settings and the encryptor built from them, published together through one atomic
+    # reference: a fiber on another thread sees the old pair or the new one, never half of each.
     private class EncryptorCache
       getter key : {String, Symbol, Bool, Bool, Int32, String}
       getter encryptor : Message::Encryptor
@@ -262,10 +263,11 @@ module Session
       end
     end
 
-    @encryptor_cache : EncryptorCache? = nil
+    @encryptor_cache = Atomic(EncryptorCache?).new(nil)
 
-    # Raises `InsecureSecretException` when `store` encrypts with the secret (a `CookieStore`, or
-    # any store with `encrypt_redis_data`) and the secret is missing, published or too short.
+    # Raises `InsecureSecretException` when `store` encrypts with the secret (`Store#encrypts_with_secret?`:
+    # a `CookieStore`, or a Redis store with `encrypt_redis_data`) and the secret is missing, published
+    # or too short.
     def validate_secret_for!(store : Store) : Nil
       validate_secret! if store.encrypts_with_secret?
     end
@@ -277,7 +279,11 @@ module Session
 
     # Validate secret security - warns or raises based on configuration
     def validate_secret! : Nil
-      key = secret
+      validate_secret!(secret)
+    end
+
+    # Checks `key`, the secret already read: `secret` reads the environment on every call.
+    private def validate_secret!(key : String) : Nil
       if key.bytesize < MIN_SECRET_BYTES
         raise InsecureSecretException.new(
           "The session secret is #{key.bytesize} bytes; it must be at least #{MIN_SECRET_BYTES} bytes " \
@@ -289,7 +295,8 @@ module Session
       if require_secure_secret
         raise InsecureSecretException.new(
           "Using default secret is not allowed when require_secure_secret is enabled. " \
-          "Please configure a secure secret using Session.configure { |c| c.secret = \"your-secure-secret\" }"
+          "Set SESSION_SECRET to a random value of at least #{MIN_SECRET_BYTES} bytes (`openssl rand -hex 32`), " \
+          "or configure one with Session.configure { |c| c.secret = ENV[\"SESSION_SECRET\"] }"
         )
       end
 
@@ -297,7 +304,8 @@ module Session
       unless @secret_warning_logged
         Log.warn {
           "SECURITY WARNING: Using default session secret. This is insecure for production. " \
-          "Configure a secure secret: Session.configure { |c| c.secret = \"your-32-byte-secret\" }"
+          "Set SESSION_SECRET to a random value of at least #{MIN_SECRET_BYTES} bytes (`openssl rand -hex 32`), " \
+          "or configure one with Session.configure { |c| c.secret = ENV[\"SESSION_SECRET\"] }"
         }
         @secret_warning_logged = true
       end

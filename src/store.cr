@@ -22,7 +22,10 @@ module Session
     # Storage abstraction - must be implemented by subclasses
     abstract def storage : String
 
-    # Whether this store encrypts sessions with `Session.config.secret`: with `encrypt_redis_data`.
+    # Whether this store encrypts sessions with `Session.config.secret`. `Session.configure` and
+    # `SessionHandler` require a usable secret only when it does. The default follows
+    # `encrypt_redis_data` (`RedisStore`, `ClusteredRedisStore`); a store that never encrypts
+    # returns false (`MemoryStore`), and one that always does returns true (`CookieStore`).
     def encrypts_with_secret? : Bool
       Session.config.encrypt_redis_data
     end
