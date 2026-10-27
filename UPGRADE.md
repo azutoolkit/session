@@ -18,8 +18,8 @@ pushes only, so it holds that pull request's change and nothing after it.
   32 bytes is refused, and `Session.configure` checks it at boot when the store encrypts with it. A `MemoryStore` never
   needs it.
 - Isolation fixes: the current session, the flash messages and `CookieStore`'s request cookies are kept per request,
-  not per store. `bind_to_ip` and `bind_to_user_agent` now refuse a session used from another client (they never
-  refused anything), with `trust_proxy_headers` for `X-Forwarded-For`; `Store#authenticate` changes privileges under
+  not per store. `bind_to_ip` and `bind_to_user_agent` now answer a session used from another client with a
+  fresh session (they never refused anything), with `trust_proxy_headers` for `X-Forwarded-For`; `Store#authenticate` changes privileges under
   a new session id.
 - Crystal 1.22.1 or newer.
 
