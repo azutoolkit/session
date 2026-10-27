@@ -18,6 +18,20 @@ Nothing here needs a code change. Semver impact: minor (new opt-in API, one bug 
 - `Session::Store#current_session?` returns the request's session without creating one.
 - `Session::Flash#to_h` returns the messages a view shows.
 
+## Expired sessions are refused when loaded (behavior change)
+
+No API change, but sessions can now end sooner than before. Semver impact: patch (security fix).
+
+- Every store now refuses a session whose `expires_at` has passed when it is loaded, and the request starts a fresh
+  session. A copied `CookieStore` cookie no longer stays signed in after the timeout.
+- `RedisStore` sessions now end at their `expires_at` even for a visitor who keeps using them, when
+  `sliding_expiration` is `false` (the default): `expires_at` is set when the session is created (or regenerated),
+  so the session lasts `timeout` from then. Before, every save ran `SETEX`, which reset the Redis TTL, and nothing
+  read `expires_at`, so an active session lived indefinitely. To keep sessions alive while they are used, set
+  `config.sliding_expiration = true`: each request then moves `expires_at` to `timeout` from now.
+- A stored or signed payload without `expires_at` no longer loads. Payloads written by released versions always
+  carry it. A `Session::Base` subclass that overrides `after_initialize` must call `super`.
+
 ## Upgrading from the `SessionData` API to `Session::Base`
 
 Releases before v1.0.28 defined sessions with the `SessionData` module and the `SessionId(T)` wrapper. From v1.0.28 on, a single `Session::Base` class replaces both. There was no 2.0 release: this migration happens inside the 1.0.x line, and the "Before" snippets below show code that no longer compiles.
