@@ -15,7 +15,7 @@ Session uses specific exception types for precise error handling and graceful de
 | `SessionEncryptionException` | -- | Encryption or decryption failure |
 | `CookieSizeExceededException` | `actual_size`, `max_size` | Cookie exceeds 4KB limit |
 | `SessionBindingException` | `binding_type` | Client fingerprint mismatch |
-| `InsecureSecretException` | -- | Default secret with `require_secure_secret` |
+| `InsecureSecretException` | -- | Missing or published secret with `require_secure_secret`, or a secret under 32 bytes; `SessionHandler` raises it (a 500) for a store that encrypts |
 | `CircuitOpenException` | `time_until_retry` | Circuit breaker is open |
 | `ConnectionPoolTimeoutException` | -- | Pool checkout timeout |
 | `ClusterException` | -- | General cluster failure |

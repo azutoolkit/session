@@ -36,8 +36,9 @@ Declare the store type with `Session.use_store`, then configure:
 Session.use_store(Session::MemoryStore(UserSession))
 
 Session.configure do |config|
-  # Required: Secret key for encryption (use environment variable in production)
-  config.secret = ENV["SESSION_SECRET"]? || "your-32-character-secret-key-here"
+  # The key comes from SESSION_SECRET (32 bytes or more). Without it, development gets a random
+  # key per process; in production and staging, a store that encrypts (CookieStore, or
+  # encrypt_redis_data) makes Session.configure raise Session::InsecureSecretException at boot.
 
   # Session timeout
   config.timeout = 24.hours
@@ -113,7 +114,7 @@ require "session"
 Session.use_store(Session::MemoryStore(UserSession))
 
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::MemoryStore(UserSession).new
 end
 
@@ -190,7 +191,7 @@ end
 Session.use_store(Session::MemoryStore(UserSession))
 
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]? || "dev-secret-32-characters-long!!"
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 1.hour
   config.sliding_expiration = true
   config.store = Session::MemoryStore(UserSession).new

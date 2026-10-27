@@ -34,7 +34,7 @@ end
 
 # Configure with clustering
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 1.hour
 
   # Enable clustering
@@ -194,7 +194,7 @@ deleted = store.bulk_delete { |s| s.user_id == compromised_id }
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 24.hours
 
   # Cluster settings
@@ -223,7 +223,7 @@ end
 
 ```crystal
 Session.configure do |config|
-  config.secret = "dev-secret-not-for-production"
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 1.hour
 
   # Disable clustering in development
@@ -241,7 +241,7 @@ end
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
   # Aggressive caching for high traffic
   config.cluster.enabled = true

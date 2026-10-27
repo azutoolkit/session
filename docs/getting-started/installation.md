@@ -39,7 +39,7 @@ end
 Session.use_store(Session::MemoryStore(TestSession))
 
 Session.configure do |config|
-  config.secret = "test-secret-for-verification"
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::MemoryStore(TestSession).new
 end
 

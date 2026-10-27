@@ -102,7 +102,7 @@ A thread-safe, in-memory cache with:
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
   # Enable clustering
   config.cluster.enabled = true

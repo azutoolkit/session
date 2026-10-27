@@ -14,10 +14,10 @@ Decryption reverses the process: decode, verify HMAC signature, then decrypt. Th
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]       # 32+ characters recommended
+  # The secret is read from SESSION_SECRET (random per process without it, outside production and staging)
   config.digest_algorithm = :sha256           # HMAC algorithm
   config.digest_fallback = true               # Allow SHA1 fallback for migration
-  config.require_secure_secret = true         # Raise if using default secret
+  config.require_secure_secret = true         # Raise on a missing, published or short secret
 end
 ```
 
@@ -47,16 +47,20 @@ The default digest is `:sha256`. If you're migrating from an older version that 
 
 ## Secret Key Requirements
 
-- Minimum 32 characters for AES-256
-- Set `require_secure_secret = true` in production to raise `InsecureSecretException` if the default secret is used
-- Without `require_secure_secret`, a warning is logged once on first use of the default secret
+- At least 32 bytes, with or without `use_kdf` (the HMAC signature uses the secret itself): a shorter one raises
+  `InsecureSecretException`, from `Session.configure` when the store encrypts with it
+- Unset, `secret` is `SESSION_SECRET`. Without that, `InsecureSecretException` where `require_secure_secret` holds
+  (production and staging by default, read from `CRYSTAL_ENV` each time the secret is read), and a random per-process
+  key with one warning elsewhere. With a `CookieStore`, or `encrypt_redis_data`, `Session::SessionHandler` then fails every request with `Session::InsecureSecretException` (a 500, logged by the server) instead of answering without a working session; a store that does not encrypt never reads the secret, so nothing is raised.
+- The secret older releases used by default (`Configuration::DEFAULT_SECRET`) is public: set explicitly, it is refused
+  where `require_secure_secret` holds and warned about elsewhere
 
 ## Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `secret` | `String` | (default) | Encryption key (32+ chars) |
-| `require_secure_secret` | `Bool` | `false` | Raise on default secret |
+| `secret` | `String` | `SESSION_SECRET` | Encryption key (32+ bytes) |
+| `require_secure_secret` | `Bool` | production, staging | Raise on a missing or published secret |
 | `digest_algorithm` | `Symbol` | `:sha256` | HMAC algorithm |
 | `digest_fallback` | `Bool` | `true` | Allow SHA1 fallback |
 | `encrypt_redis_data` | `Bool` | `false` | Encrypt data in Redis |

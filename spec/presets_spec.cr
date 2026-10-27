@@ -112,10 +112,10 @@ describe Session::Configuration do
     end
 
     it "preserves secret when applying preset" do
-      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.secret = "my-custom-secret-key-32-bytes!!!"
       Session.config.apply_preset(:production)
 
-      Session.config.secret.should eq "my-custom-secret-key-32-bytes!!"
+      Session.config.secret.should eq "my-custom-secret-key-32-bytes!!!"
     end
 
     it "raises for unknown preset" do

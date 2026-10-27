@@ -48,7 +48,7 @@ end
 Session.use_store(Session::RedisStore(UserSession))
 
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 24.hours
   config.store = Session::RedisStore(UserSession).new(client: Redis.new)
 end

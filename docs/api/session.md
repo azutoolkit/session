@@ -49,7 +49,7 @@ The `authenticated?` method is abstract and must be implemented by your subclass
 ```crystal
 # Configure the session library
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::MemoryStore(UserSession).new
 end
 

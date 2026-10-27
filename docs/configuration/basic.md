@@ -6,7 +6,7 @@ Configure Session to match your application's requirements.
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::MemoryStore(UserSession).new
 end
 ```
@@ -29,7 +29,7 @@ end
 ```crystal
 Session.configure do |config|
   config.apply_preset(:production)
-  config.secret = ENV.fetch("SESSION_SECRET")
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::RedisStore(UserSession).new(client: Redis.new)
 end
 ```
@@ -56,7 +56,7 @@ Session.configure do |config|
   config.timeout = 8.hours
   config.bind_to_user_agent = true
 
-  config.secret = ENV.fetch("SESSION_SECRET")
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::RedisStore(UserSession).new
 end
 ```
@@ -66,7 +66,7 @@ end
 ```crystal
 Session.configure do |config|
   # Core settings
-  config.secret = ENV["SESSION_SECRET"]      # Required: encryption key
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 1.hour                     # Session lifetime
   config.session_key = "_session"             # Cookie name
 
@@ -81,7 +81,7 @@ end
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `secret` | `String` | (default) | Encryption secret (32+ chars recommended) |
+| `secret` | `String` | `SESSION_SECRET` | Encryption and signing secret (32+ bytes, also with `use_kdf`) |
 | `timeout` | `Time::Span` | `1.hour` | Session lifetime |
 | `session_key` | `String` | `"_session"` | Cookie name |
 | `store` | `Store` | `nil` | Storage backend (typed by `Session.use_store`) |
@@ -93,7 +93,7 @@ end
 <!-- skip -->
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
   case ENV["APP_ENV"]?
   when "production"

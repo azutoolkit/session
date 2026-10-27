@@ -39,14 +39,14 @@ end
 Session::Web.use_store(Session::CookieStore(UserSession))
 
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 8.hours
   config.session_key = "myapp_session"
   config.store = Session::CookieStore(UserSession).new
 end
 ```
 
-`SESSION_SECRET` is required in production and staging (`CRYSTAL_ENV`): the published default secret is refused there, because anyone could forge a cookie signed with it. Generate one with `Random::Secure.hex(32)` and keep it in your process environment.
+`SESSION_SECRET` (32 bytes or more) is required in production and staging (`CRYSTAL_ENV`): without it the cookie store cannot sign: `Session.configure` raises `Session::InsecureSecretException` at boot, and a `Session::SessionHandler` built without `Session.configure` fails every request with it (a 500). Elsewhere a missing secret means a random key for this process (with one warning), so sessions end at a restart. Generate one with `Random::Secure.hex(32)` and keep it in your process environment. This is close to `Azu::Env.secret("SESSION_SECRET")` but not the same: azu refuses the random fallback in its `strict_environments` (`production` unless `AZU_STRICT_ENVS` or `Azu::Env.strict_environments=` widens it), while session refuses it in production and staging (`CRYSTAL_ENV`), whatever `AZU_STRICT_ENVS` says.
 
 ## Mount the handler
 

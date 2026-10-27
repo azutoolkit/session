@@ -7,14 +7,14 @@ describe Session::Configuration do
     end
 
     it "returns false when custom secret is set" do
-      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.secret = "my-custom-secret-key-32-bytes!!!"
       Session.config.using_default_secret?.should be_false
     end
   end
 
   describe "#validate_secret!" do
     it "does nothing when custom secret is set" do
-      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.secret = "my-custom-secret-key-32-bytes!!!"
       Session.config.validate_secret!
       # Should not raise
     end
@@ -27,7 +27,7 @@ describe Session::Configuration do
     end
 
     it "does not raise when require_secure_secret is true and custom secret set" do
-      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.secret = "my-custom-secret-key-32-bytes!!!"
       Session.config.require_secure_secret = true
       Session.config.validate_secret!
       # Should not raise
@@ -121,7 +121,7 @@ describe Session::Configuration do
     end
 
     it "passes KDF settings to encryptor" do
-      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.secret = "my-custom-secret-key-32-bytes!!!"
       Session.config.use_kdf = true
       Session.config.kdf_iterations = 50_000
 
@@ -275,6 +275,159 @@ describe Session::Configuration do
       config.secret = "a-secret-nobody-else-knows-0123456789"
 
       config.validate_secret!
+    end
+  end
+end
+
+describe Session::Configuration do
+  describe "without a configured secret" do
+    around_each do |example|
+      previous = {ENV["CRYSTAL_ENV"]?, ENV["SESSION_SECRET"]?}
+      ENV.delete("SESSION_SECRET")
+      ENV["CRYSTAL_ENV"] = "development"
+      example.run
+    ensure
+      {"CRYSTAL_ENV", "SESSION_SECRET"}.zip(previous.not_nil!).each do |name, value|
+        value ? (ENV[name] = value) : ENV.delete(name)
+      end
+    end
+
+    it "never signs with the published default secret" do
+      config = Session::Configuration.new
+
+      config.secret.should_not eq Session::Configuration::DEFAULT_SECRET
+      config.using_default_secret?.should be_false
+      config.secret.should eq Session::Configuration.new.secret
+    end
+
+    it "reads SESSION_SECRET" do
+      ENV["SESSION_SECRET"] = "from-the-environment-0123456789abcdef"
+
+      Session::Configuration.new.secret.should eq "from-the-environment-0123456789abcdef"
+    end
+
+    it "is refused in production even when CRYSTAL_ENV is set after the configuration was built" do
+      config = Session::Configuration.new
+      ENV["CRYSTAL_ENV"] = "Production"
+
+      expect_raises(Session::InsecureSecretException, /SESSION_SECRET/) { config.encryptor }
+    end
+
+    it "is refused in production even after the random fallback was used" do
+      config = Session::Configuration.new
+      config.encryptor
+      ENV["CRYSTAL_ENV"] = "production"
+
+      expect_raises(Session::InsecureSecretException, /SESSION_SECRET/) { config.encryptor }
+    end
+
+    it "refuses a SESSION_SECRET shorter than 32 bytes with a clear message" do
+      ENV["SESSION_SECRET"] = "short"
+
+      expect_raises(Session::InsecureSecretException, /at least 32 bytes/) { Session::Configuration.new.encryptor }
+    end
+
+    it "refuses an empty configured secret with a clear message" do
+      config = Session::Configuration.new
+      config.secret = ""
+
+      expect_raises(Session::InsecureSecretException, /at least 32 bytes/) { config.encryptor }
+    end
+  end
+end
+
+describe Session::SessionHandler do
+  it "fails the request when the cookie store has no usable secret, instead of answering without a session" do
+    Session.config.secret = "short"
+    handler = Session::SessionHandler.new(Session::CookieStore(UserSession).new)
+    context = HTTP::Server::Context.new(HTTP::Request.new("GET", "/"), HTTP::Server::Response.new(IO::Memory.new))
+
+    expect_raises(Session::InsecureSecretException) { handler.call(context) }
+  end
+end
+
+describe Session::Configuration do
+  describe "a short secret with key derivation on" do
+    # The HMAC signature uses the raw secret, so PBKDF2 does not make a short one safe.
+    ["", "a", "abc", "31-bytes-is-still-too-short-xyz"].each do |short|
+      it "refuses #{short.bytesize} bytes under the production preset" do
+        config = Session::Configuration.new
+        config.apply_preset(:production)
+        config.secret = short
+
+        config.use_kdf.should be_true
+        expect_raises(Session::InsecureSecretException, /at least 32 bytes/) { config.encryptor }
+      end
+    end
+  end
+
+  describe "#encryptor" do
+    it "reuses the encryptor (and its derived key) while the settings stay the same" do
+      config = Session::Configuration.new
+      config.secret = "a-secret-nobody-else-knows-0123456789"
+      config.use_kdf = true
+      config.kdf_iterations = 1_000
+
+      config.encryptor.should be config.encryptor
+    end
+
+    it "builds a new encryptor when a setting it depends on changes" do
+      config = Session::Configuration.new
+      config.secret = "a-secret-nobody-else-knows-0123456789"
+      config.use_kdf = true
+      config.kdf_iterations = 1_000
+      first = config.encryptor
+
+      config.kdf_salt = "another-salt"
+      config.encryptor.should_not be first
+      second = config.encryptor
+
+      config.secret = "another-secret-nobody-knows-0123456789"
+      config.encryptor.should_not be second
+    end
+  end
+
+  describe "#validate_secret_for!" do
+    it "refuses a short secret for a store that encrypts with it" do
+      Session.config.secret = "short"
+
+      expect_raises(Session::InsecureSecretException, /at least 32 bytes/) do
+        Session.config.validate_secret_for!(Session::CookieStore(UserSession).new)
+      end
+    end
+
+    it "does not check the secret for a store that does not use it" do
+      Session.config.secret = "short"
+
+      Session.config.validate_secret_for!(Session::MemoryStore(UserSession).new)
+    end
+  end
+end
+
+describe "Session.configure" do
+  it "fails at boot when the configured store encrypts with an unusable secret" do
+    expect_raises(Session::InsecureSecretException, /at least 32 bytes/) do
+      Session.configure do |c|
+        c.encrypt_redis_data = true
+        c.secret = "short"
+      end
+    end
+  end
+
+  it "fails at boot under the production preset with a short secret" do
+    expect_raises(Session::InsecureSecretException, /at least 32 bytes/) do
+      Session.configure do |c|
+        c.apply_preset(:production)
+        c.cookie_secure = true
+        c.encrypt_redis_data = true
+        c.secret = "abc"
+      end
+    end
+  end
+
+  it "does not check the secret when the store does not encrypt" do
+    Session.configure do |c|
+      c.secret = "short"
     end
   end
 end

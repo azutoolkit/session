@@ -118,7 +118,7 @@ module Session
   # Session.use_store(Session::CookieStore(UserSession))
   #
   # Session.configure do |c|
-  #   c.secret = ENV["SESSION_SECRET"]
+  #   # The secret is read from SESSION_SECRET (random per process in development without it)
   #   c.store = Session::CookieStore(UserSession).new
   # end
   # ```
@@ -132,9 +132,17 @@ module Session
     end
   end
 
+  # Applies the block to `CONFIG`, then checks it: a store that encrypts with the secret fails here,
+  # at boot, when the secret is unusable (`SessionHandler` checks again on each request).
   def self.configure(&)
     with CONFIG yield CONFIG
     CONFIG.validate_cookie_options!
+    config = CONFIG
+    if config.responds_to?(:store) && (store = config.store)
+      config.validate_secret_for!(store)
+    elsif config.encrypt_redis_data
+      config.validate_secret!
+    end
   end
 
   def self.config

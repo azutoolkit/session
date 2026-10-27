@@ -6,10 +6,9 @@ Configure security features to protect session data.
 
 ```crystal
 Session.configure do |config|
-  # Required: Secret key for encryption
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
-  # Enforce secure secret (raises if using default)
+  # Raise on a missing or published secret (default: in production and staging)
   config.require_secure_secret = true
 
   # Digest algorithm for HMAC
@@ -57,8 +56,8 @@ end
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `secret` | `String` | (default) | Encryption key |
-| `require_secure_secret` | `Bool` | `false` | Enforce non-default secret |
+| `secret` | `String` | `SESSION_SECRET` | Encryption key; random per process when unset, outside production and staging |
+| `require_secure_secret` | `Bool` | production, staging | Raise on a missing or published secret |
 | `digest_algorithm` | `Symbol` | `:sha256` | HMAC algorithm |
 | `digest_fallback` | `Bool` | `true` | Allow SHA1 fallback |
 | `use_kdf` | `Bool` | `false` | Enable PBKDF2 |

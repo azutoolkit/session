@@ -20,7 +20,7 @@ This page covers all configuration options for session clustering.
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
   # Enable clustering with defaults
   config.cluster.enabled = true
@@ -35,7 +35,7 @@ end
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 1.hour
 
   # Cluster configuration
@@ -183,7 +183,7 @@ config.store = Session::ClusteredRedisStore(UserSession).new(
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
   case ENV["APP_ENV"]?
   when "production"

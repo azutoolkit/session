@@ -48,7 +48,7 @@ Session.use_store(Session::MemoryStore(UserSession))
 
 # Configure once
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::MemoryStore(UserSession).new
 end
 
@@ -100,7 +100,7 @@ config.store = Session::ClusteredRedisStore(UserSession).new(client: Redis.new)
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]       # 32+ chars recommended
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.use_kdf = true                       # Enable PBKDF2
   config.kdf_iterations = 100_000             # OWASP recommended
   config.bind_to_ip = true                    # Prevent session hijacking
@@ -237,7 +237,7 @@ class HelloHandler
 end
 
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::MemoryStore(UserSession).new
 end
 
@@ -269,7 +269,7 @@ end
 Session::Web.use_store(Session::CookieStore(UserSession))
 
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::CookieStore(UserSession).new
 end
 
@@ -292,7 +292,7 @@ Cookies are always `HttpOnly`, `Secure` and `SameSite=Strict`; `config.cookie_se
 ```crystal
 Session.configure do |config|
   # Core
-  config.secret = ENV["SESSION_SECRET"]   # Required
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 1.hour                 # Session lifetime
   config.session_key = "_session"         # Cookie name
   config.sliding_expiration = true        # Extend on access

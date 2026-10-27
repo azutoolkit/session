@@ -23,11 +23,13 @@ module Session
   end
 
   class Configuration
+    # The secret older releases signed with when none was configured. It is public, so it is never
+    # used by default any more and is refused where `require_secure_secret` holds.
     DEFAULT_SECRET = "1sxc1aNxGHTTZKlK5cpCgufJAqGM4G13"
 
     property timeout : Time::Span = 1.hour
     property session_key : String = "_session"
-    property secret : String = DEFAULT_SECRET
+    setter secret : String?
 
     # Cookie attributes. Cookies are always HttpOnly. Secure keeps them off plain http (browsers
     # still accept a Secure cookie over http on localhost); turn it off only for an http-only setup.
@@ -44,10 +46,49 @@ module Session
     # Environments that must not run on the published default secret.
     PRODUCTION_ENVIRONMENTS = %w(production staging)
 
-    # Security: require a secure secret (non-default) - raises if default secret is used.
-    # The default secret is public, so anyone could forge a session cookie signed with it:
-    # it is refused in production and staging (`CRYSTAL_ENV`) unless turned off explicitly.
-    property require_secure_secret : Bool = PRODUCTION_ENVIRONMENTS.includes?(ENV["CRYSTAL_ENV"]?)
+    # Whether a missing or published secret is an error rather than a warning. Unless set, it holds
+    # in production and staging, read from `CRYSTAL_ENV` (case-insensitive) each time it is checked.
+    setter require_secure_secret : Bool?
+
+    def require_secure_secret : Bool
+      @require_secure_secret.nil? ? Configuration.production_environment? : @require_secure_secret == true
+    end
+
+    def self.production_environment? : Bool
+      PRODUCTION_ENVIRONMENTS.includes?(ENV["CRYSTAL_ENV"]?.try(&.strip.downcase))
+    end
+
+    # The key sessions are encrypted and signed with: the one configured, else `SESSION_SECRET`.
+    # Without either, `InsecureSecretException` where `require_secure_secret` holds, and otherwise a
+    # random key for this process only (sessions do not survive a restart or reach another instance).
+    # Not memoised: the random fallback is refused again as soon as `require_secure_secret` holds.
+    def secret : String
+      @secret || ENV["SESSION_SECRET"]?.presence || fallback_secret
+    end
+
+    # AES-256 takes a 32-byte key, and the secret is that key unless `use_kdf` derives one. The HMAC
+    # signature always uses the secret itself, so the minimum holds with `use_kdf` too.
+    MIN_SECRET_BYTES = 32
+
+    private def fallback_secret : String
+      if require_secure_secret
+        raise InsecureSecretException.new(
+          "SESSION_SECRET is not set: set it, or configure one with Session.configure { |c| c.secret = ... }"
+        )
+      end
+      Configuration.process_secret
+    end
+
+    @@process_secret : String = Random::Secure.hex(32)
+    @@process_secret_warned = Atomic(Bool).new(false)
+
+    # The random fallback, one per process so every configuration agrees on it; warns once.
+    def self.process_secret : String
+      unless @@process_secret_warned.swap(true)
+        Log.warn { "SESSION_SECRET is not set: using a random session secret for this process only" }
+      end
+      @@process_secret
+    end
 
     # Digest algorithm for HMAC signatures (:sha256 recommended, :sha1 for legacy)
     property digest_algorithm : Symbol = :sha256
@@ -192,16 +233,41 @@ module Session
       raise "Session store not configured. Call Session.use_store(StoreType) before Session.configure."
     end
 
-    def encryptor
+    # The encryptor for the current settings. It is reused while they stay the same, so PBKDF2
+    # (`use_kdf`) runs once per secret, salt and iteration count, not on every encrypt and decrypt.
+    def encryptor : Message::Encryptor
       validate_secret!
-      Message::Encryptor.new(
-        secret,
+      key = {secret, digest_algorithm, digest_fallback, use_kdf, kdf_iterations, kdf_salt}
+      cached = @encryptor_cache
+      return cached.encryptor if cached && cached.key == key
+
+      encryptor = Message::Encryptor.new(
+        key[0],
         digest: digest_algorithm,
         fallback_digest: digest_fallback ? :sha1 : nil,
         use_kdf: use_kdf,
         kdf_iterations: kdf_iterations,
         kdf_salt: kdf_salt
       )
+      @encryptor_cache = EncryptorCache.new(key, encryptor)
+      encryptor
+    end
+
+    # One reference, so a fiber on another thread sees the old pair or the new one, never half of each.
+    private class EncryptorCache
+      getter key : {String, Symbol, Bool, Bool, Int32, String}
+      getter encryptor : Message::Encryptor
+
+      def initialize(@key, @encryptor)
+      end
+    end
+
+    @encryptor_cache : EncryptorCache? = nil
+
+    # Raises `InsecureSecretException` when `store` encrypts with the secret (a `CookieStore`, or
+    # any store with `encrypt_redis_data`) and the secret is missing, published or too short.
+    def validate_secret_for!(store : Store) : Nil
+      validate_secret! if store.encrypts_with_secret?
     end
 
     # Check if the current secret is the insecure default
@@ -211,7 +277,14 @@ module Session
 
     # Validate secret security - warns or raises based on configuration
     def validate_secret! : Nil
-      return unless using_default_secret?
+      key = secret
+      if key.bytesize < MIN_SECRET_BYTES
+        raise InsecureSecretException.new(
+          "The session secret is #{key.bytesize} bytes; it must be at least #{MIN_SECRET_BYTES} bytes " \
+          "(generate one with `openssl rand -hex 32`)"
+        )
+      end
+      return unless key == DEFAULT_SECRET
 
       if require_secure_secret
         raise InsecureSecretException.new(
