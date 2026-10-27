@@ -439,6 +439,48 @@ describe Session::Configuration do
     end
   end
 
+  describe "the default secret messages name where the secret came from" do
+    around_each do |example|
+      previous = ENV["SESSION_SECRET"]?
+      ENV.delete("SESSION_SECRET")
+      example.run
+    ensure
+      previous ? (ENV["SESSION_SECRET"] = previous) : ENV.delete("SESSION_SECRET")
+    end
+
+    it "tell an explicit assignment to go, without an ENV[] that raises when the variable is unset" do
+      config = Session::Configuration.new
+      config.secret = Session::Configuration::DEFAULT_SECRET
+      config.require_secure_secret = true
+
+      message = expect_raises(Session::InsecureSecretException) { config.validate_secret! }.message.to_s
+      message.should contain "remove the `secret =` assignment"
+      message.should_not contain %(ENV["SESSION_SECRET"])
+    end
+
+    it "say SESSION_SECRET holds the published value when it does" do
+      ENV["SESSION_SECRET"] = Session::Configuration::DEFAULT_SECRET
+      config = Session::Configuration.new
+      config.require_secure_secret = true
+
+      message = expect_raises(Session::InsecureSecretException) { config.validate_secret! }.message.to_s
+      message.should contain "SESSION_SECRET holds the published default"
+      message.should_not contain "remove the `secret =` assignment"
+    end
+
+    it "warn with the same advice" do
+      config = Session::Configuration.new
+      config.secret = Session::Configuration::DEFAULT_SECRET
+      config.require_secure_secret = false
+
+      Log.capture do |logs|
+        config.validate_secret!
+        logs.check(:warn, /remove the `secret =` assignment/)
+        logs.entry.message.should_not contain %(ENV["SESSION_SECRET"])
+      end
+    end
+  end
+
   describe "#validate_secret_for!" do
     it "refuses a short secret for a store that encrypts with it" do
       Session.config.secret = "short"
@@ -605,5 +647,26 @@ describe "Store#encrypts_with_secret?" do
       Session.config.encrypt_redis_data = false
       store.encrypts_with_secret?.should be_false
     end
+  end
+end
+
+describe "reset_config (spec helper)" do
+  it "puts back the lifecycle callbacks a spec replaced" do
+    calls = 0
+    Session.config.on_started = ->(_sid : String, _data : Session::Base) { calls += 1; nil }
+    Session.config.on_deleted = ->(_sid : String, _data : Session::Base) { calls += 1; nil }
+    Session.config.on_loaded = ->(_sid : String, _data : Session::Base) { calls += 1; nil }
+    Session.config.on_client = ->(_sid : String, _data : Session::Base) { calls += 1; nil }
+    Session.config.on_regenerated = ->(_old : String, _new : String, _data : Session::Base) { calls += 1; nil }
+
+    reset_config
+
+    session = UserSession.new
+    Session.config.on_started.call("sid", session)
+    Session.config.on_deleted.call("sid", session)
+    Session.config.on_loaded.call("sid", session)
+    Session.config.on_client.call("sid", session)
+    Session.config.on_regenerated.call("old", "new", session)
+    calls.should eq 0
   end
 end

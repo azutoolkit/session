@@ -1,5 +1,28 @@
 # Upgrade Guide
 
+## Releases
+
+There is no changelog; this list says what a release contains, and the sections below say what to change.
+
+**1.1.0** (tag `v1.1`: the release job drops a `.0` patch), the first release from `master` after 1.0.31. The
+`v1.0.32` tag is not on `master`: it was cut from the merge ref of pull request #2 before the release job ran on
+pushes only, so it holds that pull request's change and nothing after it.
+
+- Opt-in Azu integration: `require "session/azu"` and `Session::Web.use_store` (typed `context.session` and
+  `context.flash`), `config.cookie_secure` and `config.cookie_same_site`, and the session is saved before the first
+  byte of the response is written.
+- Expired sessions are refused when loaded, for every store; `RedisStore` sessions end at `expires_at` unless
+  `sliding_expiration` is on.
+- No published default secret: the secret comes from `SESSION_SECRET` (random per process without it, outside
+  production and staging); production and staging refuse a missing or published secret, a secret shorter than
+  32 bytes is refused, and `Session.configure` checks it at boot when the store encrypts with it. A `MemoryStore` never
+  needs it.
+- Isolation fixes: the current session, the flash messages and `CookieStore`'s request cookies are kept per request,
+  not per store. `bind_to_ip` and `bind_to_user_agent` now answer a session used from another client with a
+  fresh session (they never refused anything), with `trust_proxy_headers` for `X-Forwarded-For`; `Store#authenticate` changes privileges under
+  a new session id.
+- Crystal 1.22.1 or newer.
+
 ## No published default secret
 
 The secret used to default to a string published in this repository, so an app that never set one signed its

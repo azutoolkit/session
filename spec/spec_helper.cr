@@ -57,6 +57,11 @@ def reset_config
   config.fail_fast_on_corruption = defaults.fail_fast_on_corruption
   config.metrics_backend = Session::Metrics::NullBackend.new
   config.cluster = Session::ClusterConfig.new
+  config.on_started = defaults.on_started
+  config.on_deleted = defaults.on_deleted
+  config.on_loaded = defaults.on_loaded
+  config.on_client = defaults.on_client
+  config.on_regenerated = defaults.on_regenerated
 end
 
 Spec.before_each do
