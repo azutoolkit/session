@@ -21,7 +21,11 @@ module Session
     getter session_id : String = UUID.random.to_s
     getter created_at : Time = Time.local
 
+    # Required in a stored or signed payload (see `after_initialize`): the default is for `new` only.
+    @[JSON::Field(presence: true)]
     property expires_at : Time = Session.config.timeout.from_now
+    @[JSON::Field(ignore: true)]
+    @expires_at_present : Bool = false
 
     # Messages for the next request. They belong to the session, so they are saved with it
     # and reach only the visitor they were meant for.
@@ -69,6 +73,13 @@ module Session
 
     private def timeout
       Session.config.timeout.from_now
+    end
+
+    # A payload without `expires_at` fails to deserialise, so no store adopts it: the default would
+    # give it a fresh expiry. A subclass that overrides this must call `super`.
+    protected def after_initialize
+      return if @expires_at_present
+      raise JSON::SerializableError.new("Missing JSON attribute: expires_at", self.class.to_s, "expires_at", 0, 0, nil)
     end
   end
 end

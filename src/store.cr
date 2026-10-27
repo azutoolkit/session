@@ -137,7 +137,9 @@ module Session
       end
 
       if current_session_id = request_cookies[session_key]?
-        if session = self[current_session_id.value]?
+        # The expiry is checked here, for every store: a cookie's `Expires` is only advice to the
+        # browser, and a copied cookie carries its own signed `expires_at` forever.
+        if (session = self[current_session_id.value]?) && session.valid?
           self.current_session = session
 
           # Apply sliding expiration if enabled

@@ -67,6 +67,49 @@ describe Session::Store do
     end
   end
 
+  describe "expiry" do
+    it "does not load a cookie session whose expiry has passed" do
+      store = Session::CookieStore(UserSession).new
+      session = UserSession.new
+      session.username = "replayed"
+      session.expires_at = 1.second.ago
+
+      cookies = HTTP::Cookies.new
+      cookies << HTTP::Cookie.new(name: store.session_key, value: session.session_id)
+      cookies << HTTP::Cookie.new(name: store.data_key, value: Session.config.encryptor.encrypt_and_sign(session.to_json))
+      store.load_from(cookies)
+
+      store.current_session?.should be_nil
+      store.current_session.session_id.should_not eq session.session_id
+    end
+
+    it "does not load a signed cookie session whose payload has no expires_at" do
+      store = Session::CookieStore(UserSession).new
+      session = UserSession.new
+      payload = JSON.parse(session.to_json).as_h
+      payload.delete("expires_at")
+
+      cookies = HTTP::Cookies.new
+      cookies << HTTP::Cookie.new(name: store.session_key, value: session.session_id)
+      cookies << HTTP::Cookie.new(name: store.data_key, value: Session.config.encryptor.encrypt_and_sign(payload.to_json))
+      store.load_from(cookies)
+
+      store.current_session?.should be_nil
+    end
+
+    it "still loads a cookie session that has not expired" do
+      store = Session::CookieStore(UserSession).new
+      session = UserSession.new
+
+      cookies = HTTP::Cookies.new
+      cookies << HTTP::Cookie.new(name: store.session_key, value: session.session_id)
+      cookies << HTTP::Cookie.new(name: store.data_key, value: Session.config.encryptor.encrypt_and_sign(session.to_json))
+      store.load_from(cookies)
+
+      store.current_session.session_id.should eq session.session_id
+    end
+  end
+
   describe "flash messages" do
     it "provides access to flash" do
       store = Session::MemoryStore(UserSession).new
@@ -224,6 +267,35 @@ if REDIS_AVAILABLE
       store = Session::RedisStore(UserSession).new(client: redis_client)
       store.should be_a Session::Store(UserSession)
       store.storage.should eq "Session::RedisStore(UserSession)"
+    end
+
+    it "does not load an expired session that is still in Redis, and deletes it" do
+      store = Session::RedisStore(UserSession).new(client: redis_client)
+      session = UserSession.new
+      session.username = "replayed"
+      session.expires_at = 1.second.ago
+      key = "session:#{session.session_id}"
+      redis_client.set(key, session.to_json, ex: 3600)
+
+      cookies = HTTP::Cookies.new
+      cookies << HTTP::Cookie.new(name: store.session_key, value: session.session_id)
+      store.load_from(cookies)
+
+      store.current_session?.should be_nil
+      store.current_session.session_id.should_not eq session.session_id
+      redis_client.get(key).should be_nil
+    end
+
+    it "still loads a live session from Redis" do
+      store = Session::RedisStore(UserSession).new(client: redis_client)
+      session = UserSession.new
+      redis_client.set("session:#{session.session_id}", session.to_json, ex: 3600)
+
+      cookies = HTTP::Cookies.new
+      cookies << HTTP::Cookie.new(name: store.session_key, value: session.session_id)
+      store.load_from(cookies)
+
+      store.current_session.session_id.should eq session.session_id
     end
   end
 end

@@ -93,7 +93,7 @@ module Session
         ) do
           with_redis_connection do |client|
             if data = client.get(prefixed(key))
-              begin
+              session = begin
                 json_data = decrypt_if_enabled(data)
                 T.from_json(json_data)
               rescue ex : Session::SessionEncryptionException
@@ -106,6 +106,13 @@ module Session
                 Log.warn { "Failed to deserialize session data for key #{key}: #{ex.message}" }
                 nil
               end
+
+              # Like MemoryStore: an expired session is removed instead of returned.
+              if session && !session.valid?
+                client.del(prefixed(key))
+                session = nil
+              end
+              session
             end
           end
         end
