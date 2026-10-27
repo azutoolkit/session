@@ -294,20 +294,27 @@ module Session
 
       if require_secure_secret
         raise InsecureSecretException.new(
-          "Using default secret is not allowed when require_secure_secret is enabled. " \
-          "Set SESSION_SECRET to a random value of at least #{MIN_SECRET_BYTES} bytes (`openssl rand -hex 32`), " \
-          "or configure one with Session.configure { |c| c.secret = ENV[\"SESSION_SECRET\"] }"
+          "Using default secret is not allowed when require_secure_secret is enabled: #{default_secret_advice}"
         )
       end
 
       # Log warning only once to avoid spam
       unless @secret_warning_logged
         Log.warn {
-          "SECURITY WARNING: Using default session secret. This is insecure for production. " \
-          "Set SESSION_SECRET to a random value of at least #{MIN_SECRET_BYTES} bytes (`openssl rand -hex 32`), " \
-          "or configure one with Session.configure { |c| c.secret = ENV[\"SESSION_SECRET\"] }"
+          "SECURITY WARNING: Using default session secret. This is insecure for production: #{default_secret_advice}"
         }
         @secret_warning_logged = true
+      end
+    end
+
+    # The published secret is never a fallback: it was assigned, or `SESSION_SECRET` holds it (an
+    # assigned secret wins over the variable, so the assignment is what has to go).
+    private def default_secret_advice : String
+      replacement = "a random value of at least #{MIN_SECRET_BYTES} bytes (`openssl rand -hex 32`)"
+      if @secret
+        "remove the `secret =` assignment and set SESSION_SECRET to #{replacement}, or assign #{replacement}"
+      else
+        "SESSION_SECRET holds the published default; set it to #{replacement}"
       end
     end
   end
