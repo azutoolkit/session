@@ -6,6 +6,7 @@ module Session
     end
 
     def call(context : HTTP::Server::Context)
+      validate_secret!
       load_session(context)
       output = commit_before_first_write(context)
       call_next(context)
@@ -46,6 +47,13 @@ module Session
       @session[@session.session_id] = @session.current_session
     rescue ex : Exception
       Log.warn { "Failed to save the session after the response started: #{ex.message}" }
+    end
+
+    # A store that encrypts with the secret cannot work without a usable one: fail the request
+    # (`InsecureSecretException`, a 500) instead of answering it with a session that is never saved.
+    private def validate_secret! : Nil
+      return unless @session.is_a?(CookieStore(T)) || Session.config.encrypt_redis_data
+      Session.config.validate_secret!
     end
 
     private def load_session(context : HTTP::Server::Context)

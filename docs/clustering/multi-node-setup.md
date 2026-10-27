@@ -137,7 +137,7 @@ spec:
 ```crystal
 # config/session.cr
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 24.hours
 
   # Clustering configuration

@@ -7,7 +7,10 @@ cookies with a key anyone could use to forge a session. Now:
 
 - `config.secret` defaults to `SESSION_SECRET`. Without it, a random key for this process (one warning), so
   sessions end when the process restarts and are not shared between instances. Set `SESSION_SECRET` to keep them.
-- In production and staging the missing secret raises `Session::InsecureSecretException` on first use.
+- In production and staging a missing secret raises `Session::InsecureSecretException` wherever the secret is
+  used. With a `CookieStore`, or `encrypt_redis_data`, `Session::SessionHandler` then fails every request with `Session::InsecureSecretException` (a 500, logged by the server) instead of answering without a working session; a store that does not encrypt never reads the secret, so nothing is raised.
+- A secret shorter than 32 bytes (unless `use_kdf` is on) raises `Session::InsecureSecretException` too, instead of
+  an `ArgumentError` from AES that the handler logged and swallowed.
   `require_secure_secret` now reads `CRYSTAL_ENV` (case-insensitive) when it is checked, not when the shard loads;
   setting it explicitly still wins.
 - `config.secret = nil` goes back to the default. `Configuration::DEFAULT_SECRET` still exists and is still refused
@@ -111,7 +114,7 @@ end
 Session.use_store(Session::MemoryStore(UserSession))
 
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::MemoryStore(UserSession).new
 end
 ```

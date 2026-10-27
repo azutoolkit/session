@@ -6,8 +6,7 @@ Configure security features to protect session data.
 
 ```crystal
 Session.configure do |config|
-  # Required: Secret key for encryption
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
   # Raise on a missing or published secret (default: in production and staging)
   config.require_secure_secret = true

@@ -118,7 +118,7 @@ module Session
   # Session.use_store(Session::CookieStore(UserSession))
   #
   # Session.configure do |c|
-  #   c.secret = ENV["SESSION_SECRET"]
+  #   # The secret is read from SESSION_SECRET (random per process in development without it)
   #   c.store = Session::CookieStore(UserSession).new
   # end
   # ```

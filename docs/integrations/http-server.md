@@ -32,7 +32,7 @@ end
 Session.use_store(Session::MemoryStore(UserSession))
 
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 24.hours
   config.session_key = "_myapp_session"
   config.store = Session::MemoryStore(UserSession).new
@@ -222,7 +222,7 @@ server.listen
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 24.hours
   config.session_key = "_app_session"
 

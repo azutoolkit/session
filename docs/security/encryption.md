@@ -14,7 +14,7 @@ Decryption reverses the process: decode, verify HMAC signature, then decrypt. Th
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]       # 32+ characters recommended
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.digest_algorithm = :sha256           # HMAC algorithm
   config.digest_fallback = true               # Allow SHA1 fallback for migration
   config.require_secure_secret = true         # Raise if using default secret
@@ -47,10 +47,11 @@ The default digest is `:sha256`. If you're migrating from an older version that 
 
 ## Secret Key Requirements
 
-- Minimum 32 characters for AES-256
+- At least 32 bytes (the AES-256 key), unless `use_kdf` derives the key: a shorter one raises
+  `InsecureSecretException`
 - Unset, `secret` is `SESSION_SECRET`. Without that, `InsecureSecretException` where `require_secure_secret` holds
-  (production and staging by default, read from `CRYSTAL_ENV` when checked), and a random per-process key with one
-  warning elsewhere
+  (production and staging by default, read from `CRYSTAL_ENV` each time the secret is read), and a random per-process
+  key with one warning elsewhere. With a `CookieStore`, or `encrypt_redis_data`, `Session::SessionHandler` then fails every request with `Session::InsecureSecretException` (a 500, logged by the server) instead of answering without a working session; a store that does not encrypt never reads the secret, so nothing is raised.
 - The secret older releases used by default (`Configuration::DEFAULT_SECRET`) is public: set explicitly, it is refused
   where `require_secure_secret` holds and warned about elsewhere
 
@@ -58,7 +59,7 @@ The default digest is `:sha256`. If you're migrating from an older version that 
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `secret` | `String` | `SESSION_SECRET` | Encryption key (32+ chars) |
+| `secret` | `String` | `SESSION_SECRET` | Encryption key (32+ bytes) |
 | `require_secure_secret` | `Bool` | production, staging | Raise on a missing or published secret |
 | `digest_algorithm` | `Symbol` | `:sha256` | HMAC algorithm |
 | `digest_fallback` | `Bool` | `true` | Allow SHA1 fallback |

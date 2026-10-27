@@ -7,14 +7,14 @@ describe Session::Configuration do
     end
 
     it "returns false when custom secret is set" do
-      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.secret = "my-custom-secret-key-32-bytes!!!"
       Session.config.using_default_secret?.should be_false
     end
   end
 
   describe "#validate_secret!" do
     it "does nothing when custom secret is set" do
-      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.secret = "my-custom-secret-key-32-bytes!!!"
       Session.config.validate_secret!
       # Should not raise
     end
@@ -27,7 +27,7 @@ describe Session::Configuration do
     end
 
     it "does not raise when require_secure_secret is true and custom secret set" do
-      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.secret = "my-custom-secret-key-32-bytes!!!"
       Session.config.require_secure_secret = true
       Session.config.validate_secret!
       # Should not raise
@@ -121,7 +121,7 @@ describe Session::Configuration do
     end
 
     it "passes KDF settings to encryptor" do
-      Session.config.secret = "my-custom-secret-key-32-bytes!!"
+      Session.config.secret = "my-custom-secret-key-32-bytes!!!"
       Session.config.use_kdf = true
       Session.config.kdf_iterations = 50_000
 
@@ -312,5 +312,36 @@ describe Session::Configuration do
 
       expect_raises(Session::InsecureSecretException, /SESSION_SECRET/) { config.encryptor }
     end
+
+    it "is refused in production even after the random fallback was used" do
+      config = Session::Configuration.new
+      config.encryptor
+      ENV["CRYSTAL_ENV"] = "production"
+
+      expect_raises(Session::InsecureSecretException, /SESSION_SECRET/) { config.encryptor }
+    end
+
+    it "refuses a SESSION_SECRET shorter than 32 bytes with a clear message" do
+      ENV["SESSION_SECRET"] = "short"
+
+      expect_raises(Session::InsecureSecretException, /at least 32 bytes/) { Session::Configuration.new.encryptor }
+    end
+
+    it "refuses an empty configured secret with a clear message" do
+      config = Session::Configuration.new
+      config.secret = ""
+
+      expect_raises(Session::InsecureSecretException, /at least 32 bytes/) { config.encryptor }
+    end
+  end
+end
+
+describe Session::SessionHandler do
+  it "fails the request when the cookie store has no usable secret, instead of answering without a session" do
+    Session.config.secret = "short"
+    handler = Session::SessionHandler.new(Session::CookieStore(UserSession).new)
+    context = HTTP::Server::Context.new(HTTP::Request.new("GET", "/"), HTTP::Server::Response.new(IO::Memory.new))
+
+    expect_raises(Session::InsecureSecretException) { handler.call(context) }
   end
 end

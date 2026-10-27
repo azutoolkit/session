@@ -22,7 +22,7 @@ Session.configure do |config|
   config.apply_preset(:production)
 
   # Override with environment-specific values
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.timeout = 4.hours
 
   # Use Redis in production
@@ -38,8 +38,7 @@ Session.configure do |config|
   # Load high security preset
   config.apply_preset(:high_security)
 
-  # Must provide secure secret
-  config.secret = ENV.fetch("SESSION_SECRET")
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
   # Use Redis with connection pooling for better performance
   pool_config = Session::ConnectionPoolConfig.new(
@@ -69,8 +68,7 @@ Session.configure do |config|
   config.cluster.node_id = ENV["NODE_ID"]? || UUID.random.to_s
   config.cluster.channel = "session:cluster:#{ENV["ENVIRONMENT"]?}"
 
-  # Must provide secure secret
-  config.secret = ENV.fetch("SESSION_SECRET")
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
   # Use clustered Redis store
   redis = Redis.new(host: ENV["REDIS_HOST"]? || "localhost")
@@ -90,7 +88,7 @@ Session.configure do |config|
   # Core settings
   config.timeout = 30.minutes
   config.session_key = "_app_session"
-  config.secret = ENV.fetch("SESSION_SECRET")
+  # The secret is read from SESSION_SECRET (random per process in development without it)
 
   # Security settings
   config.require_secure_secret = true
@@ -127,7 +125,7 @@ Session.configure do |config|
   config.bind_to_user_agent = true    # Add user agent binding
   config.compression_threshold = 1024 # Larger threshold
 
-  config.secret = ENV.fetch("SESSION_SECRET")
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::RedisStore(UserSession).new
 end
 
@@ -146,12 +144,12 @@ Session.configure do |config|
     config.store = Session::MemoryStore(UserSession).new
   when "staging"
     config.apply_preset(:production)
-    config.secret = ENV.fetch("SESSION_SECRET")
+    # The secret is read from SESSION_SECRET (random per process in development without it)
     redis = Redis.new(host: ENV["REDIS_HOST"]?)
     config.store = Session::RedisStore(UserSession).new(client: redis)
   when "production"
     config.apply_preset(:high_security)
-    config.secret = ENV.fetch("SESSION_SECRET")
+    # The secret is read from SESSION_SECRET (random per process in development without it)
     pool_config = Session::ConnectionPoolConfig.new(size: 20)
     config.store = Session::RedisStore(UserSession).with_pool(pool_config)
   else

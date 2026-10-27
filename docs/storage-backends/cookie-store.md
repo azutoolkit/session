@@ -16,7 +16,7 @@ flowchart LR
 
 ```crystal
 Session.configure do |config|
-  config.secret = ENV["SESSION_SECRET"]
+  # The secret is read from SESSION_SECRET (random per process in development without it)
   config.store = Session::CookieStore(UserSession).new
 end
 ```

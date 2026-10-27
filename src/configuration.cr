@@ -61,9 +61,13 @@ module Session
     # The key sessions are encrypted and signed with: the one configured, else `SESSION_SECRET`.
     # Without either, `InsecureSecretException` where `require_secure_secret` holds, and otherwise a
     # random key for this process only (sessions do not survive a restart or reach another instance).
+    # Not memoised: the random fallback is refused again as soon as `require_secure_secret` holds.
     def secret : String
-      @secret ||= ENV["SESSION_SECRET"]?.presence || fallback_secret
+      @secret || ENV["SESSION_SECRET"]?.presence || fallback_secret
     end
+
+    # AES-256 takes a 32-byte key, and the secret is that key unless `use_kdf` derives one.
+    MIN_SECRET_BYTES = 32
 
     private def fallback_secret : String
       if require_secure_secret
@@ -247,7 +251,14 @@ module Session
 
     # Validate secret security - warns or raises based on configuration
     def validate_secret! : Nil
-      return unless using_default_secret?
+      key = secret
+      if key.bytesize < MIN_SECRET_BYTES && !use_kdf
+        raise InsecureSecretException.new(
+          "The session secret is #{key.bytesize} bytes; it must be at least #{MIN_SECRET_BYTES} bytes " \
+          "(generate one with `openssl rand -hex 32`)"
+        )
+      end
+      return unless key == DEFAULT_SECRET
 
       if require_secure_secret
         raise InsecureSecretException.new(
