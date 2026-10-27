@@ -8,17 +8,41 @@ cookies with a key anyone could use to forge a session. Now:
 - `config.secret` defaults to `SESSION_SECRET`. Without it, a random key for this process (one warning), so
   sessions end when the process restarts and are not shared between instances. Set `SESSION_SECRET` to keep them.
 - In production and staging a missing secret raises `Session::InsecureSecretException` wherever the secret is
-  used. With a `CookieStore`, or `encrypt_redis_data`, `Session::SessionHandler` then fails every request with `Session::InsecureSecretException` (a 500, logged by the server) instead of answering without a working session; a store that does not encrypt never reads the secret, so nothing is raised.
+  used. With a `CookieStore`, or a Redis store with `encrypt_redis_data`, `Session::SessionHandler` then fails every
+  request with `Session::InsecureSecretException` (a 500, logged by the server) instead of answering without a
+  working session; a store that does not encrypt never reads the secret, so nothing is raised. A `MemoryStore`
+  never encrypts, also under the `:production`, `:high_security` and `:clustered` presets, which turn
+  `encrypt_redis_data` on.
 - A secret shorter than 32 bytes raises `Session::InsecureSecretException` too, instead of an `ArgumentError` from
   AES that the handler logged and swallowed. This holds with `use_kdf` on (the `:production`, `:high_security` and
   `:clustered` presets): the HMAC signature uses the secret itself, so PBKDF2 does not make a short one safe.
-- `Session.configure` checks the secret when the configured store encrypts with it (a `CookieStore`, or
-  `encrypt_redis_data`), so a missing or short secret fails at boot instead of on every request. Set the secret (or
-  `SESSION_SECRET`) before, or inside, the `Session.configure` block that sets such a store.
+- `Session.configure` checks the secret when the configured store encrypts with it (a `CookieStore`, or a Redis
+  store with `encrypt_redis_data`), so a missing or short secret fails at boot instead of on every request. Set the
+  secret (or `SESSION_SECRET`) before, or inside, the `Session.configure` block that sets such a store.
+- For store authors: `Session::Store#encrypts_with_secret?` tells `Session.configure` and `Session::SessionHandler`
+  whether the store needs the secret. The default follows `encrypt_redis_data`; `MemoryStore` returns `false` and
+  `CookieStore` `true`. A custom store that encrypts with `Session.config.encryptor` regardless of
+  `encrypt_redis_data` should override it to return `true`, and one that never encrypts should return `false`.
 - `require_secure_secret` now reads `CRYSTAL_ENV` (case-insensitive) when it is checked, not when the shard loads;
   setting it explicitly still wins.
 - `config.secret = nil` goes back to the default. `Configuration::DEFAULT_SECRET` still exists and is still refused
   where `require_secure_secret` holds.
+
+## Expired sessions are refused when loaded (behavior change)
+
+No API change, but sessions can now end sooner than before. Semver impact: patch (security fix).
+
+- Every store now refuses a session whose `expires_at` has passed when it is loaded, and the request starts a fresh
+  session. A copied `CookieStore` cookie no longer stays signed in after the timeout.
+- `RedisStore` sessions now end at their `expires_at` even for a visitor who keeps using them, when
+  `sliding_expiration` is `false` (the default): `expires_at` is set when the session is created (or regenerated),
+  so the session lasts `timeout` from then. Before, every save ran `SETEX`, which reset the Redis TTL, and nothing
+  read `expires_at`, so an active session lived indefinitely. To keep sessions alive while they are used, set
+  `config.sliding_expiration = true`: each request then moves `expires_at` to `timeout` from now. The
+  `:development`, `:production`, `:high_security` and `:clustered` presets already set it, so an app that applies
+  one of them keeps sliding sessions.
+- A stored or signed payload without `expires_at` no longer loads. Payloads written by released versions always
+  carry it. A `Session::Base` subclass that overrides `after_initialize` must call `super`.
 
 ## Crystal 1.22.1 or newer (no code change)
 
@@ -37,20 +61,6 @@ Nothing here needs a code change. Semver impact: minor (new opt-in API, one bug 
 - `config.allow_insecure_cookies` and `Session::InvalidCookieOptions`: `Session.configure` now refuses `cookie_same_site = None` with `cookie_secure = false`, and `cookie_secure = false` when `require_secure_secret` is on, unless `allow_insecure_cookies = true`. Only code that already turned `Secure` off is affected.
 - `Session::Store#current_session?` returns the request's session without creating one.
 - `Session::Flash#to_h` returns the messages a view shows.
-
-## Expired sessions are refused when loaded (behavior change)
-
-No API change, but sessions can now end sooner than before. Semver impact: patch (security fix).
-
-- Every store now refuses a session whose `expires_at` has passed when it is loaded, and the request starts a fresh
-  session. A copied `CookieStore` cookie no longer stays signed in after the timeout.
-- `RedisStore` sessions now end at their `expires_at` even for a visitor who keeps using them, when
-  `sliding_expiration` is `false` (the default): `expires_at` is set when the session is created (or regenerated),
-  so the session lasts `timeout` from then. Before, every save ran `SETEX`, which reset the Redis TTL, and nothing
-  read `expires_at`, so an active session lived indefinitely. To keep sessions alive while they are used, set
-  `config.sliding_expiration = true`: each request then moves `expires_at` to `timeout` from now.
-- A stored or signed payload without `expires_at` no longer loads. Payloads written by released versions always
-  carry it. A `Session::Base` subclass that overrides `after_initialize` must call `super`.
 
 ## Upgrading from the `SessionData` API to `Session::Base`
 

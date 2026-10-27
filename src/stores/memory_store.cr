@@ -17,6 +17,12 @@ module Session
       self.class.name
     end
 
+    # Sessions stay in this process as objects: nothing is encrypted, so the secret is never read
+    # (`encrypt_redis_data`, set by the :production, :high_security and :clustered presets, does not apply).
+    def encrypts_with_secret? : Bool
+      false
+    end
+
     def [](key : String) : T
       if session = sessions[key]?
         if session.valid?

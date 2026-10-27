@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "log/spec"
 
 describe Session::Configuration do
   describe "#using_default_secret?" do
@@ -385,6 +386,57 @@ describe Session::Configuration do
       config.secret = "another-secret-nobody-knows-0123456789"
       config.encryptor.should_not be second
     end
+
+    it "reads the secret once per call" do
+      config = SecretReadCounter.new
+      config.secret = "a-secret-nobody-else-knows-0123456789"
+
+      config.encryptor
+      config.reads.should eq 1
+      config.encryptor
+      config.reads.should eq 2
+    end
+
+    it "gives every fiber a working encryptor while the settings change" do
+      config = Session::Configuration.new
+      config.secret = "a-secret-nobody-else-knows-0123456789"
+      done = Channel(Exception?).new
+
+      8.times do |i|
+        spawn do
+          50.times { |j| config.kdf_salt = "salt-#{(i + j) % 3}"; config.encryptor.encrypt_and_sign("data") }
+          done.send(nil)
+        rescue ex
+          done.send(ex)
+        end
+      end
+
+      8.times { done.receive.should be_nil }
+    end
+  end
+
+  describe "the default secret messages" do
+    it "suggest a secret that is long enough" do
+      config = Session::Configuration.new
+      config.secret = Session::Configuration::DEFAULT_SECRET
+      config.require_secure_secret = true
+
+      error = expect_raises(Session::InsecureSecretException) { config.validate_secret! }
+      error.message.to_s.should contain "openssl rand -hex 32"
+      error.message.to_s.should_not contain "your-"
+    end
+
+    it "warn with a secret that is long enough" do
+      config = Session::Configuration.new
+      config.secret = Session::Configuration::DEFAULT_SECRET
+      config.require_secure_secret = false
+
+      Log.capture do |logs|
+        config.validate_secret!
+        logs.check(:warn, /openssl rand -hex 32/)
+        logs.entry.message.should_not contain "your-"
+      end
+    end
   end
 
   describe "#validate_secret_for!" do
@@ -404,10 +456,54 @@ describe Session::Configuration do
   end
 end
 
+# Counts the reads of `secret`: each one reads the environment when no secret is configured.
+class SecretReadCounter < Session::Configuration
+  getter reads = 0
+
+  def secret : String
+    @reads += 1
+    super
+  end
+end
+
+describe "reset_config" do
+  it "restores what a preset and the cookie options change" do
+    config = Session.config
+    config.apply_preset(:high_security)
+    config.kdf_salt = "another-salt"
+    config.cookie_secure = false
+    config.cookie_same_site = HTTP::Cookie::SameSite::Lax
+    config.allow_insecure_cookies = true
+    config.retry_config = Session::RetryConfig.new(max_attempts: 9)
+    config.circuit_breaker_config = Session::CircuitBreakerConfig.new(failure_threshold: 99)
+
+    reset_config
+
+    defaults = Session::Configuration.new
+    {% for name in %w(timeout encrypt_redis_data sliding_expiration log_errors circuit_breaker_enabled enable_retry
+                     compress_data compression_threshold bind_to_ip bind_to_user_agent use_kdf kdf_iterations kdf_salt
+                     digest_algorithm digest_fallback fail_fast_on_corruption cookie_secure cookie_same_site
+                     allow_insecure_cookies) %}
+      config.{{name.id}}.should eq defaults.{{name.id}}
+    {% end %}
+    config.retry_config.max_attempts.should eq defaults.retry_config.max_attempts
+    config.circuit_breaker_config.failure_threshold.should eq defaults.circuit_breaker_config.failure_threshold
+    config.cluster.enabled.should be_false
+  end
+end
+
+# Encrypts with the secret when `encrypt_redis_data` is on, as `RedisStore` does, without a Redis server.
+class RedisLikeStore < Session::MemoryStore(UserSession)
+  def encrypts_with_secret? : Bool
+    Session.config.encrypt_redis_data
+  end
+end
+
 describe "Session.configure" do
   it "fails at boot when the configured store encrypts with an unusable secret" do
     expect_raises(Session::InsecureSecretException, /at least 32 bytes/) do
       Session.configure do |c|
+        c.store = RedisLikeStore.new
         c.encrypt_redis_data = true
         c.secret = "short"
       end
@@ -418,16 +514,96 @@ describe "Session.configure" do
     expect_raises(Session::InsecureSecretException, /at least 32 bytes/) do
       Session.configure do |c|
         c.apply_preset(:production)
-        c.cookie_secure = true
-        c.encrypt_redis_data = true
+        c.store = RedisLikeStore.new
         c.secret = "abc"
       end
+    end
+  end
+
+  it "checks the secret without a store when encrypt_redis_data is on" do
+    expect_raises(Session::InsecureSecretException, /at least 32 bytes/) do
+      Session.configure do |c|
+        c.store = nil
+        c.encrypt_redis_data = true
+        c.secret = "short"
+      end
+    end
+  end
+
+  it "does not check the secret without a store when encrypt_redis_data is off" do
+    Session.configure do |c|
+      c.store = nil
+      c.secret = "short"
     end
   end
 
   it "does not check the secret when the store does not encrypt" do
     Session.configure do |c|
       c.secret = "short"
+    end
+  end
+
+  describe "a memory store in production without a secret" do
+    around_each do |example|
+      previous = {ENV["CRYSTAL_ENV"]?, ENV["SESSION_SECRET"]?}
+      ENV.delete("SESSION_SECRET")
+      ENV["CRYSTAL_ENV"] = "production"
+      example.run
+    ensure
+      {"CRYSTAL_ENV", "SESSION_SECRET"}.zip(previous.not_nil!).each do |name, value|
+        value ? (ENV[name] = value) : ENV.delete(name)
+      end
+    end
+
+    {:production, :high_security, :clustered}.each do |preset|
+      it "boots under the #{preset} preset: the memory store never reads the secret" do
+        Session.configure do |c|
+          c.apply_preset(preset)
+          c.store = Session::MemoryStore(UserSession).new
+          c.secret = nil
+        end
+
+        Session.config.encrypt_redis_data.should be_true
+      end
+    end
+
+    it "serves requests under the production preset" do
+      store = Session::MemoryStore(UserSession).new
+      Session.configure do |c|
+        c.apply_preset(:production)
+        c.store = store
+        c.secret = nil
+      end
+      handler = Session::SessionHandler.new(store)
+      handler.next = ->(context : HTTP::Server::Context) { context.response.status_code = 200 }
+      context = HTTP::Server::Context.new(HTTP::Request.new("GET", "/"), HTTP::Server::Response.new(IO::Memory.new))
+
+      handler.call(context)
+
+      context.response.status_code.should eq 200
+    end
+  end
+end
+
+describe "Store#encrypts_with_secret?" do
+  it "is false for a memory store, whatever encrypt_redis_data says" do
+    Session.config.encrypt_redis_data = true
+
+    Session::MemoryStore(UserSession).new.encrypts_with_secret?.should be_false
+  end
+
+  it "is true for a cookie store" do
+    Session::CookieStore(UserSession).new.encrypts_with_secret?.should be_true
+  end
+
+  if REDIS_AVAILABLE
+    it "follows encrypt_redis_data for a Redis store" do
+      store = Session::RedisStore(UserSession).new(client: redis_client)
+
+      Session.config.encrypt_redis_data = true
+      store.encrypts_with_secret?.should be_true
+      Session.config.encrypt_redis_data = false
+      store.encrypts_with_secret?.should be_false
     end
   end
 end

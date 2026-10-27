@@ -40,6 +40,12 @@ Subclasses must implement:
 | `session_key` | `String` | Cookie name (default `"_session"`) |
 | `create_session_cookie` | `HTTP::Cookie` | Build a session cookie for a host |
 
+## Secret
+
+| Method | Return | Description |
+|--------|--------|-------------|
+| `encrypts_with_secret?` | `Bool` | Whether the store encrypts with `Session.config.secret`. `Session.configure` and `SessionHandler` require a usable secret only when it does. Default: `encrypt_redis_data`. `MemoryStore` returns `false`, `CookieStore` `true`. A custom store that encrypts with `Session.config.encryptor` regardless of `encrypt_redis_data` overrides it to return `true` |
+
 ## Callbacks
 
 `on(event, session_id, session)` dispatches to configured callbacks:

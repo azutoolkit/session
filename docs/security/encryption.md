@@ -51,7 +51,10 @@ The default digest is `:sha256`. If you're migrating from an older version that 
   `InsecureSecretException`, from `Session.configure` when the store encrypts with it
 - Unset, `secret` is `SESSION_SECRET`. Without that, `InsecureSecretException` where `require_secure_secret` holds
   (production and staging by default, read from `CRYSTAL_ENV` each time the secret is read), and a random per-process
-  key with one warning elsewhere. With a `CookieStore`, or `encrypt_redis_data`, `Session::SessionHandler` then fails every request with `Session::InsecureSecretException` (a 500, logged by the server) instead of answering without a working session; a store that does not encrypt never reads the secret, so nothing is raised.
+  key with one warning elsewhere. With a `CookieStore`, or a Redis store with `encrypt_redis_data`,
+  `Session::SessionHandler` then fails every request with `Session::InsecureSecretException` (a 500, logged by the
+  server) instead of answering without a working session; a store that does not encrypt never reads the secret, so
+  nothing is raised. A `MemoryStore` never encrypts, also under the presets that turn `encrypt_redis_data` on.
 - The secret older releases used by default (`Configuration::DEFAULT_SECRET`) is public: set explicitly, it is refused
   where `require_secure_secret` holds and warned about elsewhere
 
