@@ -56,7 +56,7 @@ end
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `secret` | `String` | `SESSION_SECRET` | Encryption key; random per process when unset, outside production |
+| `secret` | `String` | `SESSION_SECRET` | Encryption key; random per process when unset, outside production and staging |
 | `require_secure_secret` | `Bool` | production, staging | Raise on a missing or published secret |
 | `digest_algorithm` | `Symbol` | `:sha256` | HMAC algorithm |
 | `digest_fallback` | `Bool` | `true` | Allow SHA1 fallback |

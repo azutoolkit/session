@@ -69,12 +69,12 @@ end
 Session.configure do |c|
   c.timeout = 1.hour
   c.session_key = "_session"
-  c.secret = "your-secret-key"
-  c.provider = Session::RedisStore(UserSession).provider(client: Redis.new)
+  # The secret is read from SESSION_SECRET (32+ bytes, e.g. `openssl rand -hex 32`); never hard-code it
+  c.store = Session::RedisStore(UserSession).new(client: Redis.new)
 
   # Event handlers for monitoring
-  c.on_started = ->(sid : String, data : SessionData) { ... }
-  c.on_deleted = ->(sid : String, data : SessionData) { ... }
+  c.on_started = ->(sid : String, data : Session::Base) { ... }
+  c.on_deleted = ->(sid : String, data : Session::Base) { ... }
 end
 ```
 

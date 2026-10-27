@@ -46,7 +46,7 @@ Session.configure do |config|
 end
 ```
 
-`SESSION_SECRET` (32 bytes or more) is required in production and staging (`CRYSTAL_ENV`): without it the cookie store cannot sign, and `Session::SessionHandler` fails every request with `Session::InsecureSecretException` (a 500). Elsewhere a missing secret means a random key for this process (with one warning), so sessions end at a restart. Generate one with `Random::Secure.hex(32)` and keep it in your process environment. This is close to `Azu::Env.secret("SESSION_SECRET")` but not the same: azu refuses the random fallback only in production, and at boot when the secret is read, while session also refuses it in staging, and on the first request that needs the secret.
+`SESSION_SECRET` (32 bytes or more) is required in production and staging (`CRYSTAL_ENV`): without it the cookie store cannot sign: `Session.configure` raises `Session::InsecureSecretException` at boot, and a `Session::SessionHandler` built without `Session.configure` fails every request with it (a 500). Elsewhere a missing secret means a random key for this process (with one warning), so sessions end at a restart. Generate one with `Random::Secure.hex(32)` and keep it in your process environment. This is close to `Azu::Env.secret("SESSION_SECRET")` but not the same: azu refuses the random fallback in its `strict_environments` (`production` unless `AZU_STRICT_ENVS` or `Azu::Env.strict_environments=` widens it), while session refuses it in production and staging (`CRYSTAL_ENV`), whatever `AZU_STRICT_ENVS` says.
 
 ## Mount the handler
 

@@ -14,10 +14,10 @@ Decryption reverses the process: decode, verify HMAC signature, then decrypt. Th
 
 ```crystal
 Session.configure do |config|
-  # The secret is read from SESSION_SECRET (random per process in development without it)
+  # The secret is read from SESSION_SECRET (random per process without it, outside production and staging)
   config.digest_algorithm = :sha256           # HMAC algorithm
   config.digest_fallback = true               # Allow SHA1 fallback for migration
-  config.require_secure_secret = true         # Raise if using default secret
+  config.require_secure_secret = true         # Raise on a missing, published or short secret
 end
 ```
 
@@ -47,8 +47,8 @@ The default digest is `:sha256`. If you're migrating from an older version that 
 
 ## Secret Key Requirements
 
-- At least 32 bytes (the AES-256 key), unless `use_kdf` derives the key: a shorter one raises
-  `InsecureSecretException`
+- At least 32 bytes, with or without `use_kdf` (the HMAC signature uses the secret itself): a shorter one raises
+  `InsecureSecretException`, from `Session.configure` when the store encrypts with it
 - Unset, `secret` is `SESSION_SECRET`. Without that, `InsecureSecretException` where `require_secure_secret` holds
   (production and staging by default, read from `CRYSTAL_ENV` each time the secret is read), and a random per-process
   key with one warning elsewhere. With a `CookieStore`, or `encrypt_redis_data`, `Session::SessionHandler` then fails every request with `Session::InsecureSecretException` (a 500, logged by the server) instead of answering without a working session; a store that does not encrypt never reads the secret, so nothing is raised.

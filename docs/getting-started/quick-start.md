@@ -38,7 +38,7 @@ Session.use_store(Session::MemoryStore(UserSession))
 Session.configure do |config|
   # The key comes from SESSION_SECRET (32 bytes or more). Without it, development gets a random
   # key per process; in production and staging, a store that encrypts (CookieStore, or
-  # encrypt_redis_data) fails each request with Session::InsecureSecretException.
+  # encrypt_redis_data) makes Session.configure raise Session::InsecureSecretException at boot.
 
   # Session timeout
   config.timeout = 24.hours

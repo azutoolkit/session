@@ -81,7 +81,7 @@ end
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `secret` | `String` | `SESSION_SECRET` | Encryption secret (32+ bytes, required unless `use_kdf`) |
+| `secret` | `String` | `SESSION_SECRET` | Encryption and signing secret (32+ bytes, also with `use_kdf`) |
 | `timeout` | `Time::Span` | `1.hour` | Session lifetime |
 | `session_key` | `String` | `"_session"` | Cookie name |
 | `store` | `Store` | `nil` | Storage backend (typed by `Session.use_store`) |
