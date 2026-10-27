@@ -66,7 +66,8 @@ module Session
       @secret || ENV["SESSION_SECRET"]?.presence || fallback_secret
     end
 
-    # AES-256 takes a 32-byte key, and the secret is that key unless `use_kdf` derives one.
+    # AES-256 takes a 32-byte key, and the secret is that key unless `use_kdf` derives one. The HMAC
+    # signature always uses the secret itself, so the minimum holds with `use_kdf` too.
     MIN_SECRET_BYTES = 32
 
     private def fallback_secret : String
@@ -232,16 +233,41 @@ module Session
       raise "Session store not configured. Call Session.use_store(StoreType) before Session.configure."
     end
 
-    def encryptor
+    # The encryptor for the current settings. It is reused while they stay the same, so PBKDF2
+    # (`use_kdf`) runs once per secret, salt and iteration count, not on every encrypt and decrypt.
+    def encryptor : Message::Encryptor
       validate_secret!
-      Message::Encryptor.new(
-        secret,
+      key = {secret, digest_algorithm, digest_fallback, use_kdf, kdf_iterations, kdf_salt}
+      cached = @encryptor_cache
+      return cached.encryptor if cached && cached.key == key
+
+      encryptor = Message::Encryptor.new(
+        key[0],
         digest: digest_algorithm,
         fallback_digest: digest_fallback ? :sha1 : nil,
         use_kdf: use_kdf,
         kdf_iterations: kdf_iterations,
         kdf_salt: kdf_salt
       )
+      @encryptor_cache = EncryptorCache.new(key, encryptor)
+      encryptor
+    end
+
+    # One reference, so a fiber on another thread sees the old pair or the new one, never half of each.
+    private class EncryptorCache
+      getter key : {String, Symbol, Bool, Bool, Int32, String}
+      getter encryptor : Message::Encryptor
+
+      def initialize(@key, @encryptor)
+      end
+    end
+
+    @encryptor_cache : EncryptorCache? = nil
+
+    # Raises `InsecureSecretException` when `store` encrypts with the secret (a `CookieStore`, or
+    # any store with `encrypt_redis_data`) and the secret is missing, published or too short.
+    def validate_secret_for!(store : Store) : Nil
+      validate_secret! if store.encrypts_with_secret?
     end
 
     # Check if the current secret is the insecure default
@@ -252,7 +278,7 @@ module Session
     # Validate secret security - warns or raises based on configuration
     def validate_secret! : Nil
       key = secret
-      if key.bytesize < MIN_SECRET_BYTES && !use_kdf
+      if key.bytesize < MIN_SECRET_BYTES
         raise InsecureSecretException.new(
           "The session secret is #{key.bytesize} bytes; it must be at least #{MIN_SECRET_BYTES} bytes " \
           "(generate one with `openssl rand -hex 32`)"

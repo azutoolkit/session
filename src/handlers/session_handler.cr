@@ -52,8 +52,7 @@ module Session
     # A store that encrypts with the secret cannot work without a usable one: fail the request
     # (`InsecureSecretException`, a 500) instead of answering it with a session that is never saved.
     private def validate_secret! : Nil
-      return unless @session.is_a?(CookieStore(T)) || Session.config.encrypt_redis_data
-      Session.config.validate_secret!
+      Session.config.validate_secret_for!(@session)
     end
 
     private def load_session(context : HTTP::Server::Context)

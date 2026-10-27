@@ -345,3 +345,89 @@ describe Session::SessionHandler do
     expect_raises(Session::InsecureSecretException) { handler.call(context) }
   end
 end
+
+describe Session::Configuration do
+  describe "a short secret with key derivation on" do
+    # The HMAC signature uses the raw secret, so PBKDF2 does not make a short one safe.
+    ["", "a", "abc", "31-bytes-is-still-too-short-xyz"].each do |short|
+      it "refuses #{short.bytesize} bytes under the production preset" do
+        config = Session::Configuration.new
+        config.apply_preset(:production)
+        config.secret = short
+
+        config.use_kdf.should be_true
+        expect_raises(Session::InsecureSecretException, /at least 32 bytes/) { config.encryptor }
+      end
+    end
+  end
+
+  describe "#encryptor" do
+    it "reuses the encryptor (and its derived key) while the settings stay the same" do
+      config = Session::Configuration.new
+      config.secret = "a-secret-nobody-else-knows-0123456789"
+      config.use_kdf = true
+      config.kdf_iterations = 1_000
+
+      config.encryptor.should be config.encryptor
+    end
+
+    it "builds a new encryptor when a setting it depends on changes" do
+      config = Session::Configuration.new
+      config.secret = "a-secret-nobody-else-knows-0123456789"
+      config.use_kdf = true
+      config.kdf_iterations = 1_000
+      first = config.encryptor
+
+      config.kdf_salt = "another-salt"
+      config.encryptor.should_not be first
+      second = config.encryptor
+
+      config.secret = "another-secret-nobody-knows-0123456789"
+      config.encryptor.should_not be second
+    end
+  end
+
+  describe "#validate_secret_for!" do
+    it "refuses a short secret for a store that encrypts with it" do
+      Session.config.secret = "short"
+
+      expect_raises(Session::InsecureSecretException, /at least 32 bytes/) do
+        Session.config.validate_secret_for!(Session::CookieStore(UserSession).new)
+      end
+    end
+
+    it "does not check the secret for a store that does not use it" do
+      Session.config.secret = "short"
+
+      Session.config.validate_secret_for!(Session::MemoryStore(UserSession).new)
+    end
+  end
+end
+
+describe "Session.configure" do
+  it "fails at boot when the configured store encrypts with an unusable secret" do
+    expect_raises(Session::InsecureSecretException, /at least 32 bytes/) do
+      Session.configure do |c|
+        c.encrypt_redis_data = true
+        c.secret = "short"
+      end
+    end
+  end
+
+  it "fails at boot under the production preset with a short secret" do
+    expect_raises(Session::InsecureSecretException, /at least 32 bytes/) do
+      Session.configure do |c|
+        c.apply_preset(:production)
+        c.cookie_secure = true
+        c.encrypt_redis_data = true
+        c.secret = "abc"
+      end
+    end
+  end
+
+  it "does not check the secret when the store does not encrypt" do
+    Session.configure do |c|
+      c.secret = "short"
+    end
+  end
+end

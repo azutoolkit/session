@@ -22,6 +22,11 @@ module Session
     # Storage abstraction - must be implemented by subclasses
     abstract def storage : String
 
+    # Whether this store encrypts sessions with `Session.config.secret`: with `encrypt_redis_data`.
+    def encrypts_with_secret? : Bool
+      Session.config.encrypt_redis_data
+    end
+
     # The session of the request being served. A store is shared by every request, so it is
     # kept per fiber: concurrent requests, and the next request on a keep-alive connection,
     # never see each other's session. `SessionHandler` calls `release` when a request ends.

@@ -41,6 +41,11 @@ module Session
       self.class.name
     end
 
+    # Every cookie is encrypted and signed with the secret.
+    def encrypts_with_secret? : Bool
+      true
+    end
+
     def [](key : String) : T
       if data = cookies[data_key]?
         begin
