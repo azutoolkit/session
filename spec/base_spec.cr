@@ -46,6 +46,22 @@ describe Session::Base do
       restored.expires_at.to_unix.should eq session.expires_at.to_unix
     end
 
+    it "is required when deserialising, so a payload without it is refused instead of given a fresh expiry" do
+      payload = JSON.parse(UserSession.new.to_json).as_h
+      payload.delete("expires_at")
+
+      expect_raises(JSON::SerializableError, /expires_at/) do
+        UserSession.from_json(payload.to_json)
+      end
+    end
+
+    it "keeps the serialised format: payloads written before it was required still load" do
+      json = UserSession.new.to_json
+
+      JSON.parse(json).as_h.keys.should_not contain "expires_at_present"
+      UserSession.from_json(json).valid?.should be_true
+    end
+
     it "reflects configured timeout" do
       Session.config.timeout = 2.hours
       session = UserSession.new
