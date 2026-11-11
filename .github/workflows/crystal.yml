@@ -1,24 +1,77 @@
 name: Crystal CI
 
+# Pushes to master, by hand, and weekly (the Crystal `latest` leg and the `redis:latest` image float, so a week with no
+# push can still break). Which jobs run follows the git diff of the push (see the `changes` job).
 on:
   push:
     branches: [master]
-  pull_request:
-    branches: [master]
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  # What the push changed. A path is code unless it is known to be documentation or ignorable, so a path nobody
+  # classified runs the tests. A schedule, a manual run, a new or force-pushed ref and an API error run everything.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+      docs: ${{ steps.classify.outputs.docs }}
+    steps:
+      - id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          code=false; docs=false; files=""
+          if [ "$EVENT" = push ] && [ -n "${BEFORE//0/}" ]; then
+            files=$(gh api --paginate "repos/$REPO/compare/$BEFORE...$SHA" --jq '.files[].filename') || files=""
+          fi
+          if [ -z "$files" ]; then
+            code=true; docs=true
+          else
+            while IFS= read -r f; do
+              case "$f" in
+                docs/*|README.md|UPGRADE.md) docs=true ;;
+                *.md|LICENSE) ;;
+                *) code=true ;;
+              esac
+            done <<< "$files"
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "docs=$docs" >> "$GITHUB_OUTPUT"
+          echo "code=$code docs=$docs"
+
   codacy-analysis-cli:
     name: Codacy Analysis CLI
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
 
       - name: Run Codacy Analysis CLI
         uses: codacy/codacy-analysis-cli-action@master
+
   test:
     name: test (Crystal ${{ matrix.crystal }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -34,7 +87,7 @@ jobs:
           - 6379:6379
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: shards install
@@ -47,14 +100,18 @@ jobs:
         env:
           REDIS_HOST: redis
 
+  # The code blocks of the documentation compile against src, so a code change runs this too.
   docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     container:
       image: crystallang/crystal:1.22.1
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: shards install
@@ -62,60 +119,82 @@ jobs:
       - name: Check the code blocks of the documentation compile
         run: crystal run scripts/check_docs.cr -- README.md UPGRADE.md $(find docs -name '*.md' | sort)
 
+  # Releasing tags the version and commits the bump to master, so only a push that changed code may do it. The
+  # codacy job is not in `needs`: it does not gate releases. `test` is the whole matrix, so the release also waits for
+  # the `latest` leg: when a new Crystal release breaks the specs, releases stop until it is fixed (deliberate).
+  # If master is protected, set the RELEASE_TOKEN secret to a token that may push to it (else GITHUB_TOKEN is used).
+  # The bump commit carries [skip ci].
   release:
     runs-on: ubuntu-latest
-    # The codacy job is not in `needs`: it does not gate releases.
-    # `test` is the whole matrix, so the release also waits for the `latest` leg: when a new Crystal release breaks the
-    # specs, releases stop until it is fixed (fail-fast is off so the 1.22.1 leg still reports). That is deliberate, the
-    # shard is only released when it works on the newest compiler too; to stop `latest` from gating, mark that leg
-    # `continue-on-error` via a matrix `experimental` flag.
-    needs:
-      - test
-      - docs
-    # Releasing tags the version and commits the bump to master, so only a push to master may do it
-    # (on a pull request the tag already exists and the job fails, or would write to master).
-    if: ${{ success() && github.event_name == 'push' }}
+    timeout-minutes: 10
+    needs: [changes, test, docs]
+    if: >-
+      github.event_name == 'push' &&
+      needs.changes.outputs.code == 'true' &&
+      !contains(github.event.head_commit.message, 'chore: bump version')
+    permissions:
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
 
       - name: Compute Release Version
         id: semver
-        uses: paulhatch/semantic-version@v4.0.2
+        uses: paulhatch/semantic-version@v6.0.5
         with:
           tag_prefix: "v"
           major_pattern: "(MAJOR)"
           minor_pattern: "(MINOR)"
-          # A string to determine the format of the version output
-          format: "${major}.${minor}.${patch}"
-          # If this is set to true, *every* commit will be treated as a new version.
+          version_format: "${major}.${minor}.${patch}"
           bump_each_commit: false
           search_commit_body: true
 
-      - name: Bump Shard Version
-        id: bump-shard
-        uses: fjogeleit/yaml-update-action@master
-        with:
-          valueFile: shard.yml
-          propertyPath: version
-          value: ${{steps.semver.outputs.version}}
-          commitChange: true
-          updateFile: true
-          targetBranch: master
-          masterBranchName: master
-          createPR: false
-          branch: master
-          message: Set shard version ${{ steps.semver.outputs.version }}
+      - name: Commit the version to shard.yml, tag it and push both to master
+        id: bump
+        env:
+          VERSION: ${{ steps.semver.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag exists already, nothing to release"
+            exit 0
+          fi
+          master_moved() { [ "$(git ls-remote origin refs/heads/master | cut -f1)" != "$GITHUB_SHA" ]; }
+          if master_moved; then
+            echo "::notice::master moved past $GITHUB_SHA; the run of the newer push releases these commits"
+            exit 0
+          fi
+
+          sed -i -E "s/^version: .*/version: $VERSION/" shard.yml
+          grep -qx "version: $VERSION" shard.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet shard.yml; then
+            git commit -m "chore: bump version to $VERSION [skip ci]" shard.yml
+          fi
+          git tag "$tag"
+
+          # Atomic: master gets the bump together with its tag, or neither changes.
+          if ! git push --atomic origin HEAD:refs/heads/master "refs/tags/$tag"; then
+            if master_moved; then
+              echo "::notice::master moved past $GITHUB_SHA during the release; the run of the newer push releases these commits"
+              exit 0
+            fi
+            echo "::error::Pushing the version bump to master was refused. If the branch protection refused it, set the RELEASE_TOKEN secret."
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: steps.bump.outputs.tag != ''
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{steps.semver.outputs.version_tag}}
-          release_name: Release v${{steps.semver.outputs.version}}
+          tag_name: ${{ steps.bump.outputs.tag }}
+          name: Release ${{ steps.bump.outputs.tag }}
           draft: false
           prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
