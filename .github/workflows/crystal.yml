@@ -1,12 +1,12 @@
 name: Crystal CI
 
-# Pushes to master, by hand, and weekly (the Crystal `latest` leg and the `redis:latest` image float, so a week with no
+# Pushes to master, by hand, and nightly (the Crystal `latest` leg and the `redis:latest` image float, so a day with no
 # push can still break). Which jobs run follows the git diff of the push (see the `changes` job).
 on:
   push:
     branches: [master]
   schedule:
-    - cron: "41 5 * * 1"
+    - cron: "41 5 * * *"
   workflow_dispatch:
 
 permissions:
